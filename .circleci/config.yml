@@ -13,17 +13,25 @@ jobs:
           name: Build dockered-slurm image and run tests
           command: |
             cd ./dockered-slurm
+
+            # Build image
             docker build -t slurm-docker-cluster:17.02.11 .
             docker-compose up -d
 
-            for i in {1..5}; do # retry
+            # Register cluster (with retry)
+            for i in {1..5}; do
               ./register_cluster.sh && s=0 && break || s=$?
               sleep 10
             done
 
-            docker exec slurmctld python36 ../setup.py install
-            docker exec c1 python36 ../setup.py install
-            docker exec c2 python36 ../setup.py install
-            docker exec slurmctld python36 ../slurm_example.py
-            docker exec slurmctld python36 -m pytest ../test.py
+            # Run setup.py on all three nodes
+            docker exec slurmctld bash -c "cd /cluster_tools && python36 setup.py install"
+            docker exec c1 bash -c "cd /cluster_tools && python36 setup.py install"
+            docker exec c2 bash -c "cd /cluster_tools && python36 setup.py install"
+
+            # Run tests
+            docker exec slurmctld bash -c "cd /cluster_tools && python36 slurm_example.py"
+            docker exec slurmctld bash -c "python36 -m pytest /cluster_tools/test.py"
+
+            # Clean up
             docker-compose down
