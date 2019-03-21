@@ -9,4 +9,11 @@ jobs:
       TZ: Europe/Berlin
     steps:
       - checkout
-      - run: echo "A first hello"
+      - run: cd ./dockered-slurm
+      - run: docker build -t slurm-docker-cluster:17.02.11 .
+      - run: docker-compose up -d
+      - run: docker exec slurmctld python36 /cluster_tools/setup.py install
+      - run: docker exec c1 python36 /cluster_tools/setup.py install
+      - run: docker exec c2 python36 /cluster_tools/setup.py install
+      - run: docker exec slurmctld python36 /cluster_tools/slurm_example.py
+      - run: docker-compose down
