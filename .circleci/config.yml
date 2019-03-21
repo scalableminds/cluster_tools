@@ -15,10 +15,15 @@ jobs:
             cd ./dockered-slurm
             docker build -t slurm-docker-cluster:17.02.11 .
             docker-compose up -d
-            sleep 5
-            ./register_cluster.sh
-            docker exec slurmctld python36 /cluster_tools/setup.py install
-            docker exec c1 python36 /cluster_tools/setup.py install
-            docker exec c2 python36 /cluster_tools/setup.py install
-            docker exec slurmctld python36 /cluster_tools/slurm_example.py
+
+            for i in {1..5}; do # retry
+              ./register_cluster.sh && s=0 && break || s=$?
+              sleep 10
+            done
+
+            docker exec slurmctld python36 ../setup.py install
+            docker exec c1 python36 ../setup.py install
+            docker exec c2 python36 ../setup.py install
+            docker exec slurmctld python36 ../slurm_example.py
+            docker exec slurmctld python36 -m pytest ../test.py
             docker-compose down

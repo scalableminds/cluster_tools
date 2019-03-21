@@ -41,8 +41,8 @@ RUN yum makecache fast \
 
 RUN pip install --upgrade pip
 
-RUN pip install Cython nose \
-    && pip install Cython nose
+RUN pip install Cython nose
+RUN python36 -m pip install -U pytest
 
 RUN ln -s $(which python36) /usr/bin/python3
 
