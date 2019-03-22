@@ -10,7 +10,7 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Build dockered-slurm image and run tests
+          name: Build dockered-slurm image
           command: |
             cd ./dockered-slurm
 
@@ -29,9 +29,16 @@ jobs:
             docker exec c1 bash -c "cd /cluster_tools && python36 setup.py install"
             docker exec c2 bash -c "cd /cluster_tools && python36 setup.py install"
 
-            # Run tests
-            docker exec slurmctld bash -c "cd /cluster_tools && python36 slurm_example.py"
-            docker exec slurmctld bash -c "python36 -m pytest /cluster_tools/test.py"
+      - run:
+          name: Re-run setup
+          command: |
+            cd ./dockered-slurm
+            docker exec slurmctld bash -c "cd /cluster_tools && python36 setup.py install"
+            docker exec c1 bash -c "cd /cluster_tools && python36 setup.py install"
+            docker exec c2 bash -c "cd /cluster_tools && python36 setup.py install"
 
-            # Clean up
-            docker-compose down
+      - run:
+          name: Run tests
+          command: |
+            cd ./dockered-slurm
+            docker exec slurmctld bash -c "cd /cluster_tools && python36 -m pytest -s test.py"
