@@ -41,7 +41,8 @@ def test_unordered_sleep():
         with executor:
             durations = [10, 5, 15]
             futures = [executor.submit(sleep, n) for n in durations]
-            durations.sort()
+            if not isinstance(executor, cluster_tools.SequentialExecutor):
+                durations.sort()
             for duration, future in zip(durations, concurrent.futures.as_completed(futures)):
                 assert future.result() == duration
 
