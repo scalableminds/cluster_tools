@@ -35,4 +35,9 @@ def worker(workerid):
     os.rename(tempfile, destfile)
 
 if __name__ == '__main__':
-    worker(*sys.argv[1:])
+    worker_id = sys.argv[1]
+    task_id = os.environ.get('SLURM_ARRAY_TASK_ID', None)
+    if task_id is not None:
+        worker_id = worker_id + "-" + task_id
+
+    worker(worker_id)

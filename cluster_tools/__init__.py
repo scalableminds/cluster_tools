@@ -84,6 +84,9 @@ class SlurmExecutor(futures.Executor):
         self.job_name = job_name
         self.was_requested_to_shutdown = False
 
+        # jobs maps depending on case
+        # - in base case: job id -> future and workerid
+        # - in job array case: job id with index -> future and workerid + index
         self.jobs = {}
         self.job_outfiles = {}
         self.jobs_lock = threading.Lock()
@@ -94,7 +97,7 @@ class SlurmExecutor(futures.Executor):
         self.wait_thread.start()
 
 
-    def _start(self, workerid):
+    def _start(self, workerid, job_count=None):
         """Start a job with the given worker ID and return an ID
         identifying the new job. The job should run ``python -m
         cfut.remote <workerid>.
@@ -103,7 +106,8 @@ class SlurmExecutor(futures.Executor):
             '{} -m cluster_tools.remote {}'.format(sys.executable, workerid),
             job_resources=self.job_resources,
             job_name=self.job_name,
-            additional_setup_lines=self.additional_setup_lines
+            additional_setup_lines=self.additional_setup_lines,
+            job_count=job_count,
         )
 
 
@@ -127,7 +131,7 @@ class SlurmExecutor(futures.Executor):
             if not self.jobs:
                 self.jobs_empty_cond.notify_all()
         if self.debug:
-            print("job completed: %i" % jobid, file=sys.stderr)
+            print("job completed: {}".format(jobid), file=sys.stderr)
 
         if failed_early:
             # If the code which should be executed on a node wasn't even
@@ -183,6 +187,50 @@ class SlurmExecutor(futures.Executor):
         fut.slurm_jobid = jobid
         return fut
 
+    def submit_tasks(self, fun, allArgs):
+        if self.was_requested_to_shutdown:
+            raise RuntimeError('submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance.')
+
+        futs = []
+        workerid = random_string()
+
+        get_workerid_with_index = lambda index: workerid + "-" + str(index)
+
+        # Submit jobs eagerly
+        for index, arg in enumerate(allArgs):
+            fut = futures.Future()
+
+            # Start the job.
+            funcser = cloudpickle.dumps((fun, [arg], {}), True)
+            infile_name = INFILE_FMT % get_workerid_with_index(index)
+
+            with open(infile_name, 'wb') as f:
+                f.write(funcser)
+
+            futs.append(fut)
+
+        job_count = len(allArgs)
+        jobid = self._start(workerid, job_count)
+        get_jobid_with_index = lambda index: str(jobid) + "-" + str(index)
+
+        if self.debug:
+            print("main job submitted: %i. consists of %i subjobs." % (jobid, job_count), file=sys.stderr)
+
+        with self.jobs_lock:
+            for index, fut in enumerate(futs):
+                jobid_with_index = get_jobid_with_index(index)
+                # Thread will wait for it to finish.
+                workerid_with_index = get_workerid_with_index(index)
+                self.wait_thread.wait(OUTFILE_FMT % workerid_with_index, jobid_with_index)
+                
+                fut.slurm_jobid = jobid
+                fut.slurm_jobindex = index
+
+                self.jobs[jobid_with_index] = (fut, workerid_with_index)
+
+        return futs
+
+
     def shutdown(self, wait=True):
         """Close the pool."""
         self.was_requested_to_shutdown = True
@@ -204,11 +252,8 @@ class SlurmExecutor(futures.Executor):
         start_time = time.time()
 
         with self:
-            futs = []
+            futs = self.submit_tasks(func, args)
             results = []
-            # Submit jobs eagerly
-            for arg in args:
-                futs.append(self.submit(func, arg))
 
             # Return a separate generator as iterator to avoid that the
             # map() method itself becomes a generator.
