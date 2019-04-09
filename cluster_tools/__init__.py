@@ -179,14 +179,17 @@ class SlurmExecutor(futures.Executor):
 
         self._cleanup(jobid)
 
-    def submit(self, fun, *args, **kwargs):
-        """Submit a job to the pool."""
-        fut = futures.Future()
-
+    def ensure_not_shutdown(self):
         if self.was_requested_to_shutdown:
             raise RuntimeError(
                 "submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance."
             )
+
+    def submit(self, fun, *args, **kwargs):
+        """Submit a job to the pool."""
+        fut = futures.Future()
+
+        self.ensure_not_shutdown()
 
         # Start the job.
         workerid = random_string()
@@ -209,10 +212,7 @@ class SlurmExecutor(futures.Executor):
         return fut
 
     def submit_tasks(self, fun, allArgs):
-        if self.was_requested_to_shutdown:
-            raise RuntimeError(
-                "submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance."
-            )
+        self.ensure_not_shutdown()
 
         futs = []
         workerid = random_string()
@@ -275,10 +275,7 @@ class SlurmExecutor(futures.Executor):
                 "The provided chunksize parameter is ignored by SlurmExecutor."
             )
 
-        if self.was_requested_to_shutdown:
-            raise RuntimeError(
-                "submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance."
-            )
+        self.ensure_not_shutdown()
 
         start_time = time.time()
 
