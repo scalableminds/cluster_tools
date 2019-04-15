@@ -122,3 +122,23 @@ def test_pickled_logging():
 
     debug_out = execute_with_log_level(logging.INFO)
     assert(not (test_output_str in debug_out))
+
+
+def test_synchronous_executor():
+    was_executed = False
+    def mark_synchronous_execution():
+        return was_executed
+
+    def throw():
+        raise Exception("Error")
+
+
+    try:
+        with cluster_tools.get_executor("synchronous") as executor:
+            fut = executor.submit(mark_synchronous_execution)
+            assert(was_executed)
+
+            fut = executor.submit(throw)
+        assert(False)
+    except Exception as e:
+        assert(True)

@@ -330,6 +330,35 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
         return ProcessPoolExecutor.__init__(self, **new_kwargs)
 
 
+class SynchronousExecutor():
+
+    def map(self, func, args, timeout=None, chunksize=None):
+        if timeout is not None or chunksize is not None:
+            logging.warning("Timeout and chunksize parameters are currently ignored within the SynchronousExecutor.")
+
+        futs = []
+        for arg in args:
+            self.submit(fun, arg)
+
+        return futs
+
+    def submit(self, fun, *args, **kwargs):
+        fut = futures.Future()
+        try:
+            result = fun(arg)
+            fut.set_result(result)
+        except Exception as e:
+            fut.set_exception(e)
+
+        # This line will raise exceptions immediately. This inverses
+        # the standard handling of futures which can contain errors without
+        # raising them. Now, the call side has to wrap the map call in an additional
+        # try-catch.
+        fut.result()
+
+        return fut
+
+
 def get_executor(environment, **kwargs):
     if environment == "slurm":
         return SlurmExecutor(**kwargs)
@@ -337,3 +366,5 @@ def get_executor(environment, **kwargs):
         return WrappedProcessPoolExecutor(**kwargs)
     elif environment == "sequential":
         return SequentialExecutor(**kwargs)
+    elif environment == "synchronous":
+        return SynchronousExecutor(**kwargs)
