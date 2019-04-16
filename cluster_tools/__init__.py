@@ -95,7 +95,7 @@ class SlurmExecutor(futures.Executor):
         job_resources=None,
         job_name=None,
         additional_setup_lines=[],
-        **kwargs,
+        **kwargs
     ):
         os.makedirs(local_filename(), exist_ok=True)
         self.debug = debug
@@ -223,7 +223,7 @@ class SlurmExecutor(futures.Executor):
         futs = []
         workerid = random_string()
 
-        get_workerid_with_index = lambda index: workerid + "-" + str(index)
+        get_workerid_with_index = lambda index: workerid + "_" + str(index)
 
         # Submit jobs eagerly
         for index, arg in enumerate(allArgs):
@@ -240,7 +240,7 @@ class SlurmExecutor(futures.Executor):
 
         job_count = len(allArgs)
         jobid = self._start(workerid, job_count)
-        get_jobid_with_index = lambda index: str(jobid) + "-" + str(index)
+        get_jobid_with_index = lambda index: str(jobid) + "_" + str(index)
 
         if self.debug:
             print(
