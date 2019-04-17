@@ -217,15 +217,9 @@ class SlurmExecutor(futures.Executor):
         fut.slurm_jobid = jobid
         return fut
 
-<<<<<<< HEAD
     def map_to_futures(self, fun, allArgs):
-||||||| merged common ancestors
-    def submit_tasks(self, fun, allArgs):
-=======
-    def submit_tasks(self, fun, allArgs):
-        allArgs = list(allArgs)
->>>>>>> 790addea55a907496294034576b569495e1297c5
         self.ensure_not_shutdown()
+        allArgs = list(allArgs)
 
         futs = []
         workerid = random_string()
