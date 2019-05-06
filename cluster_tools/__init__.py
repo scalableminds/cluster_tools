@@ -197,9 +197,23 @@ class SlurmExecutor(futures.Executor):
                 "submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance."
             )
 
+    def dereference_main(self, fun): 
+
+        if fun.__module__ == "__main__":
+            # Ensure that passed functions don't refer to __main__, but 
+            # instead to the actual module's name.
+            # See https://stackoverflow.com/a/56008860/896760
+            import __main__
+            main_module = __import__(__main__.__file__.split(".py")[0])
+            fun = getattr(main_module, fun.__name__)
+
+        return fun
+
+
     def submit(self, fun, *args, **kwargs):
         """Submit a job to the pool."""
         fut = futures.Future()
+        fun = self.dereference_main(fun)
 
         self.ensure_not_shutdown()
 
@@ -283,13 +297,14 @@ class SlurmExecutor(futures.Executor):
         self.wait_thread.stop()
         self.wait_thread.join()
 
+
     def map(self, func, args, timeout=None, chunksize=None):
         if chunksize is not None:
             logging.warning(
                 "The provided chunksize parameter is ignored by SlurmExecutor."
             )
 
-
+        func = self.dereference_main(func)
         start_time = time.time()
 
         futs = self.map_to_futures(func, args)
