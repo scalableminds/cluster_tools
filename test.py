@@ -137,9 +137,7 @@ def test_pickled_logging():
                 return file.read()
 
     debug_out = execute_with_log_level(logging.DEBUG)
-    assert(test_output_str in debug_out)
+    assert test_output_str in debug_out
 
     debug_out = execute_with_log_level(logging.INFO)
-    assert(not (test_output_str in debug_out))
-
-
+    assert not (test_output_str in debug_out)
