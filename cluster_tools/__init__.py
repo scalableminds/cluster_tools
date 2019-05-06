@@ -198,11 +198,13 @@ class SlurmExecutor(futures.Executor):
             )
 
     def dereference_main(self, fun): 
+        # Ensure that passed functions don't refer to __main__, but 
+        # instead to the actual module's name. Otherwise, unpickling
+        # wouldn't work from within this library.
+        #
+        # See https://stackoverflow.com/a/56008860/896760 for more context.
 
         if fun.__module__ == "__main__":
-            # Ensure that passed functions don't refer to __main__, but 
-            # instead to the actual module's name.
-            # See https://stackoverflow.com/a/56008860/896760
             import __main__
             main_module = __import__(__main__.__file__.split(".py")[0])
             fun = getattr(main_module, fun.__name__)
