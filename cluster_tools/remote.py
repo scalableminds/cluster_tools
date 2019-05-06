@@ -56,8 +56,6 @@ def setup_logging(meta_data):
     logger = logging.getLogger()
     if "level" in logging_config:
         logger.setLevel(logging_config["level"])
-    if "format" in logging_config:
-        logger.setFormatter(logging.Formatter(logging_config["format"]))
 
     logging.info("Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(logging_config))
     logging.info("Starting job computation...")
