@@ -198,6 +198,9 @@ class SlurmExecutor(futures.Executor):
             )
 
     def dereference_main(self, fun): 
+        if 'USE_CLOUDPICKLE' in os.environ:
+            return fun
+
         # Ensure that passed functions don't refer to __main__, but 
         # instead to the actual module's name. Otherwise, unpickling
         # wouldn't work from within this library.
