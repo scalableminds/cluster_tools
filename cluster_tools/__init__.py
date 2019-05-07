@@ -10,6 +10,7 @@ from .util import random_string, local_filename, call
 from . import pickling
 import logging
 import importlib
+import re
 
 class RemoteException(Exception):
     def __init__(self, error):
@@ -17,6 +18,41 @@ class RemoteException(Exception):
 
     def __str__(self):
         return "\n" + self.error.strip()
+
+SLURM_STATES = {
+    "Failure": [
+        "CANCELLED",
+        "BOOT_FAIL",
+        "DEADLINE",
+        "FAILED",
+        "NODE_FAIL",
+        "OUT_OF_MEMORY",
+        "PREEMPTED",
+        "STOPPED",
+        "TIMEOUT"
+    ],
+    "Success": [
+        "COMPLETED"
+    ],
+    "Ignore": [
+        "RUNNING",
+        "CONFIGURING",
+        "COMPLETING",
+        "PENDING",
+        "RESV_DEL_HOLD",
+        "REQUEUE_FED",
+        "REQUEUE_HOLD",
+        "REQUEUED",
+        "RESIZING"
+    ],
+    "Unclear": [
+        "SUSPENDED",
+        "REVOKED",
+        "SIGNALING",
+        "SPECIAL_EXIT",
+        "STAGE_OUT"
+    ]
+}
 
 
 class FileWaitThread(threading.Thread):
@@ -79,17 +115,26 @@ class FileWaitThread(threading.Thread):
                                 logging.error(
                                     "Couldn't call scontrol to determine job's status. {}. Continuing to poll for output file. This could be an indicator for a failed job which was already cleaned up from the slurm db. If this is the case, the process will hang forever."
                                 )
-                            elif "JobState=CANCELLED" in str(stdout):
-                                handle_completed_job(job_id, filename, True)
-                            elif "JobState=FAILED" in str(stdout):
-                                handle_completed_job(job_id, filename, True)
-                            elif "JobState=COMPLETED" in str(stdout):
-                                logging.error(
-                                    "Job state is completed, but {} couldn't be found.".format(
-                                        filename
-                                    )
-                                )
-                                handle_completed_job(job_id, filename, True)
+                            else:
+                                job_state_search = re.search('JobState=([a-zA-Z_]*)', str(stdout))
+
+                                if job_state_search:
+                                    job_state = job_state_search.group(1)
+
+                                    if job_state in SLURM_STATES["Failure"]:
+                                        handle_completed_job(job_id, filename, True)
+                                    elif job_state in SLURM_STATES["Ignore"]:
+                                        # This job state can be ignored
+                                        pass
+                                    elif job_state in SLURM_STATES["Unclear"]:
+                                        logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_state))
+                                    elif job_state in SLURM_STATES["Success"]:
+                                        logging.error(
+                                            "Job state is completed, but {} couldn't be found.".format(
+                                                filename
+                                            )
+                                        )
+                                        handle_completed_job(job_id, filename, True)
 
             time.sleep(self.interval)
 
