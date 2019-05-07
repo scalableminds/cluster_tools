@@ -207,9 +207,30 @@ class SlurmExecutor(futures.Executor):
         #
         # See https://stackoverflow.com/a/56008860/896760 for more context.
 
+        def file_path_to_absolute_module(file_path):
+            """
+            Given a file path, return an import path.
+            :param file_path: A file path.
+            :return:
+            """
+            assert os.path.exists(file_path)
+            file_loc, ext = os.path.splitext(file_path)
+            assert ext in ('.py', '.pyc')
+            directory, module = os.path.split(file_loc)
+            module_path = [module]
+            while True:
+                if os.path.exists(os.path.join(directory, '__init__.py')):
+                    directory, package = os.path.split(directory)
+                    module_path.append(package)
+                else:
+                    break
+            path = '.'.join(module_path[::-1])
+            return path
+
         if fun.__module__ == "__main__":
-            import __main__
-            main_module = __import__(__main__.__file__.split(".py")[0])
+            main_path = file_path_to_absolute_module(sys.argv[0])
+            print("try to import {} from {}".format(fun.__name__, main_path))
+            main_module = __import__(main_path)
             fun = getattr(main_module, fun.__name__)
 
         return fun
