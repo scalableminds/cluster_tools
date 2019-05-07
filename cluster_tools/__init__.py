@@ -9,7 +9,7 @@ from .remote import INFILE_FMT, OUTFILE_FMT
 from .util import random_string, local_filename, call
 from . import pickling
 import logging
-
+import importlib
 
 class RemoteException(Exception):
     def __init__(self, error):
@@ -230,7 +230,7 @@ class SlurmExecutor(futures.Executor):
         if fun.__module__ == "__main__":
             main_path = file_path_to_absolute_module(sys.argv[0])
             print("try to import {} from {}".format(fun.__name__, main_path))
-            main_module = __import__(main_path)
+            main_module = importlib.import_module(main_path)
             fun = getattr(main_module, fun.__name__)
 
         return fun
