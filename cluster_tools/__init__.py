@@ -79,6 +79,8 @@ class FileWaitThread(threading.Thread):
                                 logging.error(
                                     "Couldn't call scontrol to determine job's status. {}. Continuing to poll for output file. This could be an indicator for a failed job which was already cleaned up from the slurm db. If this is the case, the process will hang forever."
                                 )
+                            elif "JobState=CANCELLED" in str(stdout):
+                                handle_completed_job(job_id, filename, True)
                             elif "JobState=FAILED" in str(stdout):
                                 handle_completed_job(job_id, filename, True)
                             elif "JobState=COMPLETED" in str(stdout):
@@ -229,7 +231,6 @@ class SlurmExecutor(futures.Executor):
 
         if fun.__module__ == "__main__":
             main_path = file_path_to_absolute_module(sys.argv[0])
-            print("try to import {} from {}".format(fun.__name__, main_path))
             main_module = importlib.import_module(main_path)
             fun = getattr(main_module, fun.__name__)
 
@@ -267,6 +268,7 @@ class SlurmExecutor(futures.Executor):
     def map_to_futures(self, fun, allArgs):
         self.ensure_not_shutdown()
         allArgs = list(allArgs)
+        fun = self.dereference_main(fun)
 
         futs = []
         workerid = random_string()
@@ -330,7 +332,6 @@ class SlurmExecutor(futures.Executor):
                 "The provided chunksize parameter is ignored by SlurmExecutor."
             )
 
-        func = self.dereference_main(func)
         start_time = time.time()
 
         futs = self.map_to_futures(func, args)
