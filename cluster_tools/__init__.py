@@ -11,6 +11,7 @@ from . import pickling
 import logging
 import importlib
 import re
+import signal
 
 class RemoteException(Exception):
     def __init__(self, error, job_id):
@@ -78,7 +79,7 @@ class FileWaitThread(threading.Thread):
         with self.lock:
             self.shutdown = True
 
-    def wait(self, filename, value):
+    def waitFor(self, filename, value):
         """Adds a new filename (and its associated callback value) to
         the set of files being waited upon.
         """
@@ -171,12 +172,20 @@ class SlurmExecutor(futures.Executor):
         self.wait_thread = FileWaitThread(self._completion)
         self.wait_thread.start()
 
+        signal.signal(signal.SIGINT, self.handle_kill)
+        signal.signal(signal.SIGTERM, self.handle_kill)
+
         self.meta_data = {}
         if "logging_config" in kwargs:
             self.meta_data["logging_config"] = kwargs["logging_config"]
 
-    def _start(self, workerid, job_count=None, job_name=None):
+    def handle_kill(self,signum, frame):
+      self.wait_thread.stop()
+      job_ids = "\n".join(str(id) for id in self.jobs.keys())
+      print("A termination signal was registered. The following jobs on slurm are still running:\n{}".format(job_ids))
+      sys.exit(130)
 
+    def _start(self, workerid, job_count=None, job_name=None):
         """Start a job with the given worker ID and return an ID
         identifying the new job. The job should run ``python -m
         cfut.remote <workerid>.
@@ -266,7 +275,7 @@ class SlurmExecutor(futures.Executor):
             print("job submitted: %i" % jobid, file=sys.stderr)
 
         # Thread will wait for it to finish.
-        self.wait_thread.wait(OUTFILE_FMT % workerid, jobid)
+        self.wait_thread.waitFor(OUTFILE_FMT % workerid, jobid)
 
         with self.jobs_lock:
             self.jobs[jobid] = (fut, workerid)
@@ -312,7 +321,7 @@ class SlurmExecutor(futures.Executor):
                 jobid_with_index = get_jobid_with_index(index)
                 # Thread will wait for it to finish.
                 workerid_with_index = get_workerid_with_index(index)
-                self.wait_thread.wait(
+                self.wait_thread.waitFor(
                     OUTFILE_FMT % workerid_with_index, jobid_with_index
                 )
 
