@@ -9,14 +9,52 @@ from .remote import INFILE_FMT, OUTFILE_FMT
 from .util import random_string, local_filename, call
 from . import pickling
 import logging
-
+import importlib
+import re
+import signal
 
 class RemoteException(Exception):
-    def __init__(self, error):
+    def __init__(self, error, job_id):
         self.error = error
+        self.job_id = job_id
 
     def __str__(self):
-        return "\n" + self.error.strip()
+        return str(self.job_id) + "\n" + self.error.strip()
+
+SLURM_STATES = {
+    "Failure": [
+        "CANCELLED",
+        "BOOT_FAIL",
+        "DEADLINE",
+        "FAILED",
+        "NODE_FAIL",
+        "OUT_OF_MEMORY",
+        "PREEMPTED",
+        "STOPPED",
+        "TIMEOUT"
+    ],
+    "Success": [
+        "COMPLETED"
+    ],
+    "Ignore": [
+        "RUNNING",
+        "CONFIGURING",
+        "COMPLETING",
+        "PENDING",
+        "RESV_DEL_HOLD",
+        "REQUEUE_FED",
+        "REQUEUE_HOLD",
+        "REQUEUED",
+        "RESIZING"
+    ],
+    "Unclear": [
+        "SUSPENDED",
+        "REVOKED",
+        "SIGNALING",
+        "SPECIAL_EXIT",
+        "STAGE_OUT"
+    ]
+}
 
 
 class FileWaitThread(threading.Thread):
@@ -41,7 +79,7 @@ class FileWaitThread(threading.Thread):
         with self.lock:
             self.shutdown = True
 
-    def wait(self, filename, value):
+    def waitFor(self, filename, value):
         """Adds a new filename (and its associated callback value) to
         the set of files being waited upon.
         """
@@ -79,15 +117,26 @@ class FileWaitThread(threading.Thread):
                                 logging.error(
                                     "Couldn't call scontrol to determine job's status. {}. Continuing to poll for output file. This could be an indicator for a failed job which was already cleaned up from the slurm db. If this is the case, the process will hang forever."
                                 )
-                            elif "JobState=FAILED" in str(stdout):
-                                handle_completed_job(job_id, filename, True)
-                            elif "JobState=COMPLETED" in str(stdout):
-                                logging.error(
-                                    "Job state is completed, but {} couldn't be found.".format(
-                                        filename
-                                    )
-                                )
-                                handle_completed_job(job_id, filename, True)
+                            else:
+                                job_state_search = re.search('JobState=([a-zA-Z_]*)', str(stdout))
+
+                                if job_state_search:
+                                    job_state = job_state_search.group(1)
+
+                                    if job_state in SLURM_STATES["Failure"]:
+                                        handle_completed_job(job_id, filename, True)
+                                    elif job_state in SLURM_STATES["Ignore"]:
+                                        # This job state can be ignored
+                                        pass
+                                    elif job_state in SLURM_STATES["Unclear"]:
+                                        logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_state))
+                                    elif job_state in SLURM_STATES["Success"]:
+                                        logging.error(
+                                            "Job state is completed, but {} couldn't be found.".format(
+                                                filename
+                                            )
+                                        )
+                                        handle_completed_job(job_id, filename, True)
 
             time.sleep(self.interval)
 
@@ -123,11 +172,20 @@ class SlurmExecutor(futures.Executor):
         self.wait_thread = FileWaitThread(self._completion)
         self.wait_thread.start()
 
+        signal.signal(signal.SIGINT, self.handle_kill)
+        signal.signal(signal.SIGTERM, self.handle_kill)
+
         self.meta_data = {}
         if "logging_config" in kwargs:
             self.meta_data["logging_config"] = kwargs["logging_config"]
 
-    def _start(self, workerid, job_count=None):
+    def handle_kill(self,signum, frame):
+      self.wait_thread.stop()
+      job_ids = "\n".join(str(id) for id in self.jobs.keys())
+      print("A termination signal was registered. The following jobs on slurm are still running:\n{}".format(job_ids))
+      sys.exit(130)
+
+    def _start(self, workerid, job_count=None, job_name=None):
         """Start a job with the given worker ID and return an ID
         identifying the new job. The job should run ``python -m
         cfut.remote <workerid>.
@@ -135,7 +193,7 @@ class SlurmExecutor(futures.Executor):
         return slurm.submit(
             "{} -m cluster_tools.remote {}".format(sys.executable, workerid),
             job_resources=self.job_resources,
-            job_name=self.job_name,
+            job_name=job_name if job_name is not None else self.job_name,
             additional_setup_lines=self.additional_setup_lines,
             job_count=job_count,
         )
@@ -180,7 +238,7 @@ class SlurmExecutor(futures.Executor):
         if success:
             fut.set_result(result)
         else:
-            fut.set_exception(RemoteException(result))
+            fut.set_exception(RemoteException(result, jobid))
 
         # Clean up communication files.
 
@@ -210,13 +268,14 @@ class SlurmExecutor(futures.Executor):
         with open(INFILE_FMT % workerid, "wb") as f:
             f.write(funcser)
 
-        jobid = self._start(workerid)
+        job_name = fun.__name__
+        jobid = self._start(workerid, job_name=job_name)
 
         if self.debug:
             print("job submitted: %i" % jobid, file=sys.stderr)
 
         # Thread will wait for it to finish.
-        self.wait_thread.wait(OUTFILE_FMT % workerid, jobid)
+        self.wait_thread.waitFor(OUTFILE_FMT % workerid, jobid)
 
         with self.jobs_lock:
             self.jobs[jobid] = (fut, workerid)
@@ -247,7 +306,8 @@ class SlurmExecutor(futures.Executor):
             futs.append(fut)
 
         job_count = len(allArgs)
-        jobid = self._start(workerid, job_count)
+        job_name = fun.__name__
+        jobid = self._start(workerid, job_count, job_name)
         get_jobid_with_index = lambda index: str(jobid) + "_" + str(index)
 
         if self.debug:
@@ -261,7 +321,7 @@ class SlurmExecutor(futures.Executor):
                 jobid_with_index = get_jobid_with_index(index)
                 # Thread will wait for it to finish.
                 workerid_with_index = get_workerid_with_index(index)
-                self.wait_thread.wait(
+                self.wait_thread.waitFor(
                     OUTFILE_FMT % workerid_with_index, jobid_with_index
                 )
 
@@ -283,12 +343,12 @@ class SlurmExecutor(futures.Executor):
         self.wait_thread.stop()
         self.wait_thread.join()
 
+
     def map(self, func, args, timeout=None, chunksize=None):
         if chunksize is not None:
             logging.warning(
                 "The provided chunksize parameter is ignored by SlurmExecutor."
             )
-
 
         start_time = time.time()
 

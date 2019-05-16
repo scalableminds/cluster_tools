@@ -23,9 +23,9 @@ def get_executors():
         cluster_tools.get_executor(
             "slurm", debug=True, keep_logs=True, job_resources={"mem": "10M"}
         ),
-        # cluster_tools.get_executor("multiprocessing", max_workers=5),
-        # cluster_tools.get_executor("sequential"),
-        # cluster_tools.get_executor("test_pickling"),
+        cluster_tools.get_executor("multiprocessing", max_workers=5),
+        cluster_tools.get_executor("sequential"),
+        cluster_tools.get_executor("test_pickling"),
     ]
 
 
@@ -116,11 +116,11 @@ def test_executor_args():
 
     # Test should succeed if the above lines don't raise an exception
 
+test_output_str = "Test-Output"
+def log(string):
+    logging.debug(string)
 
 def test_pickled_logging():
-    test_output_str = "Test-Output"
-    def log():
-        logging.debug(test_output_str)
 
     def execute_with_log_level(log_level):
         logging_config = {
@@ -129,7 +129,7 @@ def test_pickled_logging():
         with cluster_tools.get_executor(
             "slurm", debug=True, keep_logs=True, job_resources={"mem": "10M"}, logging_config=logging_config
         ) as executor:
-            fut = executor.submit(log)
+            fut = executor.submit(log, test_output_str)
             fut.result()
 
             output = ".cfut/slurmpy.stdout.{}.log".format(fut.slurm_jobid)
@@ -138,10 +138,10 @@ def test_pickled_logging():
                 return file.read()
 
     debug_out = execute_with_log_level(logging.DEBUG)
-    assert(test_output_str in debug_out)
+    assert test_output_str in debug_out
 
     debug_out = execute_with_log_level(logging.INFO)
-    assert(not (test_output_str in debug_out))
+    assert not (test_output_str in debug_out)
 
 
 class DummyEnum(Enum):
@@ -150,15 +150,37 @@ class DummyEnum(Enum):
     PEAR = 2
 
 def enum_consumer(value):
-    if value == DummyEnum.BANANA:
-        return DummyEnum.BANANA
+    assert value == DummyEnum.BANANA
 
 def test_cloudpickle_serialization():
+    enum_consumer_inner = enum_consumer
 
-    with cluster_tools.get_executor(
-        "test_pickling"
-    ) as executor:
-        fut = executor.submit(enum_consumer, DummyEnum.BANANA)
-        print(fut.result())
+    for fn in [enum_consumer, enum_consumer_inner]:
+        try:
+            with cluster_tools.get_executor(
+                "test_pickling"
+            ) as executor:
+                fut = executor.submit(fn, DummyEnum.BANANA)
+            assert fn == enum_consumer
+        except Exception:
+            assert fn != enum_consumer
 
     assert True
+
+class TestClass:
+    pass
+
+def deref_fun_helper(obj):
+    clss, inst, one, two = obj
+    assert one == 1
+    assert two == 2
+    assert isinstance(inst, clss)
+
+def test_dereferencing_main():
+    with cluster_tools.get_executor("slurm", debug=True, keep_logs=True, job_resources={"mem": "10M"}) as executor:
+        fut = executor.submit(deref_fun_helper, (TestClass, TestClass(), 1, 2))
+        fut.result()
+
+if __name__ == "__main__":
+    # Validate that slurm_executor.submit also works when being called from a __main__ module
+    test_dereferencing_main()
