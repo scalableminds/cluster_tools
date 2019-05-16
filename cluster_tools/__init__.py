@@ -443,3 +443,4 @@ def get_executor(environment, **kwargs):
         return SequentialExecutor(**kwargs)
     elif environment == "test_pickling":
         return PickleExecutor(**kwargs)
+    raise Exception("Unknown executor: {}".format(environment))
