@@ -1,6 +1,7 @@
 import sys
 import os
 import io
+import logging
 
 use_cloudpickle = 'USE_CLOUDPICKLE' in os.environ
 
