@@ -21,7 +21,7 @@ logging.basicConfig()
 def get_executors():
     return [
         cluster_tools.get_executor(
-            "slurm", debug=True, keep_logs=True, job_resources={"mem": "10M"}
+            "slurm", debug=True, keep_logs=True, job_resources={"mem": "100M"}
         ),
         cluster_tools.get_executor("multiprocessing", max_workers=5),
         cluster_tools.get_executor("sequential"),
