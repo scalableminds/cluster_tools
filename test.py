@@ -113,8 +113,8 @@ def test_slurm_submit_returns_job_ids():
     exc = cluster_tools.get_executor("slurm", debug=True, keep_logs=True)
     with exc:
         future = exc.submit(square, 2)
-        assert isinstance(future.slurm_jobid, int)
-        assert future.slurm_jobid > 0
+        assert isinstance(future.cluster_jobid, int)
+        assert future.cluster_jobid > 0
         assert future.result() == 4
 
 
@@ -147,7 +147,7 @@ def test_pickled_logging():
             fut = executor.submit(log, test_output_str)
             fut.result()
 
-            output = ".cfut/slurmpy.stdout.{}.log".format(fut.slurm_jobid)
+            output = ".cfut/slurmpy.stdout.{}.log".format(fut.cluster_jobid)
 
             with open(output, 'r') as file:
                 return file.read()
