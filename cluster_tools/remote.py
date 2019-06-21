@@ -2,13 +2,10 @@
 import sys
 import os
 import traceback
-from .util import local_filename
 from . import pickling
 import logging
-
-INFILE_FMT = local_filename("cfut.in.%s.pickle")
-OUTFILE_FMT = local_filename("cfut.out.%s.pickle")
-
+from cluster_tools.schedulers.slurm import SlurmExecutor
+from .file_formatters import INFILE_FMT, OUTFILE_FMT
 
 def format_remote_exc():
     typ, value, tb = sys.exc_info()
@@ -22,8 +19,9 @@ def worker(workerid):
         with open(INFILE_FMT % workerid, "rb") as f:
             indata = f.read()
         fun, args, kwargs, meta_data = pickling.loads(indata)
-  
         setup_logging(meta_data)
+  
+        logging.info("Job computation started (jobid={}, workerid={}).".format(SlurmExecutor.get_current_job_id(), workerid))
         result = True, fun(*args, **kwargs)
         logging.info("Job computation completed.")
         out = pickling.dumps(result, True)
@@ -63,7 +61,7 @@ def setup_logging(meta_data):
 
 if __name__ == "__main__":
     worker_id = sys.argv[1]
-    task_id = os.environ.get("SLURM_ARRAY_TASK_ID", None)
+    task_id = SlurmExecutor.get_job_array_index()
     if task_id is not None:
         worker_id = worker_id + "_" + task_id
 

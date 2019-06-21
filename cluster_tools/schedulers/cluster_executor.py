@@ -7,7 +7,7 @@ import sys
 from cluster_tools import pickling
 import time
 from abc import ABC, abstractmethod
-from cluster_tools.remote import INFILE_FMT, OUTFILE_FMT
+from cluster_tools.file_formatters import INFILE_FMT, OUTFILE_FMT
 import logging
 from typing import Union
 

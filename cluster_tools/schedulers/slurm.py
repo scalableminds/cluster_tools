@@ -6,7 +6,6 @@ import threading
 import time
 from cluster_tools.util import chcall, random_string, local_filename, call
 from .cluster_executor import ClusterExecutor
-from cluster_tools.remote import OUTFILE_FMT
 import logging
 from typing import Union
 
@@ -63,6 +62,14 @@ def submit_text(job, job_name):
 
 
 class SlurmExecutor(ClusterExecutor):
+
+    @staticmethod
+    def get_job_array_index():
+        return os.environ.get("SLURM_ARRAY_TASK_ID", None)
+
+    @staticmethod
+    def get_current_job_id():
+        return os.environ.get("SLURM_JOB_ID")
 
     def format_log_file_name(self, jobid):
         return local_filename("slurmpy.stdout.{}.log").format(str(jobid))
