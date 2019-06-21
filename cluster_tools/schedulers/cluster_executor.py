@@ -7,9 +7,10 @@ import sys
 from cluster_tools import pickling
 import time
 from abc import ABC, abstractmethod
+from .remote import INFILE_FMT, OUTFILE_FMT
 
-class ScheduledExecutor(futures.Executor):
-    """Futures executor for executing jobs on a Slurm cluster."""
+class ClusterExecutor(futures.Executor):
+    """Futures executor for executing jobs on a cluster."""
 
     def __init__(
         self,
@@ -59,14 +60,13 @@ class ScheduledExecutor(futures.Executor):
         """
         return self.inner_submit(
             "{} -m cluster_tools.remote {}".format(sys.executable, workerid),
-            job_resources=self.job_resources,
             job_name=self.job_name if self.job_name is not None else job_name,
             additional_setup_lines=self.additional_setup_lines,
             job_count=job_count,
         )
 
     @abstractmethod
-    def inner_submit(*args, **kwargs):
+    def inner_submit(self, *args, **kwargs):
         pass
 
     def _cleanup(self, jobid):
@@ -76,11 +76,16 @@ class ScheduledExecutor(futures.Executor):
         if self.keep_logs:
             return
 
-        outf = slurm.OUTFILE_FMT.format(str(jobid))
+        outf = self.format_log_file_name(jobid)
         try:
             os.unlink(outf)
         except OSError:
             pass
+
+    @abstractmethod
+    def format_log_file_name(self, jobid):
+        pass
+
 
     def _completion(self, jobid, failed_early):
         """Called whenever a job finishes."""
@@ -95,11 +100,11 @@ class ScheduledExecutor(futures.Executor):
             # If the code which should be executed on a node wasn't even
             # started (e.g., because python isn't installed or the cluster_tools
             # couldn't be found), no output was written to disk. We only noticed
-            # this circumstance because the whole slurm job was marked as failed.
+            # this circumstance because the whole job was marked as failed.
             # Therefore, we don't try to deserialize pickling output.
             success = False
             result = "Job submission/execution failed. Please look into the log file at {}".format(
-                slurm.OUTFILE_FMT.format(jobid)
+                self.format_log_file_name(jobid)
             )
         else:
             with open(OUTFILE_FMT % workerid, "rb") as f:
@@ -123,7 +128,7 @@ class ScheduledExecutor(futures.Executor):
     def ensure_not_shutdown(self):
         if self.was_requested_to_shutdown:
             raise RuntimeError(
-                "submit() was invoked on a SlurmExecutor instance even though shutdown() was executed for that instance."
+                "submit() was invoked on a ClusterExecutor instance even though shutdown() was executed for that instance."
             )
 
     def submit(self, fun, *args, **kwargs):

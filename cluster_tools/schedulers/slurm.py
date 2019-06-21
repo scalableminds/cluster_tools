@@ -5,11 +5,7 @@ import os
 import threading
 import time
 from cluster_tools.util import chcall, random_string, local_filename
-from .scheduled_executor import ScheduledExecutor
-
-LOG_FILE = local_filename("slurmpy.log")
-OUTFILE_FMT = local_filename("slurmpy.stdout.{}.log")
-
+from .cluster_executor import ClusterExecutor
 
 SLURM_STATES = {
     "Failure": [
@@ -63,36 +59,37 @@ def submit_text(job, job_name):
     return int(jobid)
 
 
-def submit(
-    cmdline,
-    outpath_fmt=OUTFILE_FMT,
-    job_resources=None,
-    job_name=None,
-    additional_setup_lines=[],
-    job_count=None,
-):
-    """Starts a Slurm job that runs the specified shell command line.
-    """
+class SlurmExecutor(ClusterExecutor):
 
-    outpath = outpath_fmt.format("%j" if job_count is None else "%A.%a")
+    def format_log_file_name(jobid):
+        return local_filename("slurmpy.stdout.{}.log").format(str(jobid))
 
-    job_resources_lines = []
-    if job_resources is not None:
-        for resource, value in job_resources.items():
-            job_resources_lines += ["#SBATCH --{}={}".format(resource, value)]
+    def inner_submit(
+        self,
+        cmdline,
+        outpath_fmt=OUTFILE_FMT,
+        job_name=None,
+        additional_setup_lines=[],
+        job_count=None,
+    ):
+        """Starts a Slurm job that runs the specified shell command line.
+        """
 
-    job_array_line = ""
-    if job_count is not None:
-        job_array_line = "#SBATCH --array=0-{}".format(job_count - 1)
+        outpath = outpath_fmt.format("%j" if job_count is None else "%A.%a")
 
-    script_lines = (
-        ["#!/bin/sh", "#SBATCH --output={}".format(outpath), job_array_line]
-        + job_resources_lines
-        + [*additional_setup_lines, "srun {}".format(cmdline)]
-    )
+        job_resources_lines = []
+        if self.job_resources is not None:
+            for resource, value in self.job_resources.items():
+                job_resources_lines += ["#SBATCH --{}={}".format(resource, value)]
 
-    return submit_text("\n".join(script_lines), job_name)
+        job_array_line = ""
+        if job_count is not None:
+            job_array_line = "#SBATCH --array=0-{}".format(job_count - 1)
 
-class SlurmExecutor(ScheduledExecutor):
+        script_lines = (
+            ["#!/bin/sh", "#SBATCH --output={}".format(outpath), job_array_line]
+            + job_resources_lines
+            + [*additional_setup_lines, "srun {}".format(cmdline)]
+        )
 
-    pass
+        return submit_text("\n".join(script_lines), job_name)

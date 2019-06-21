@@ -4,7 +4,6 @@ import os
 import sys
 import threading
 from .schedulers import slurm
-from .remote import INFILE_FMT, OUTFILE_FMT
 from .util import random_string, call
 from . import pickling
 import logging
