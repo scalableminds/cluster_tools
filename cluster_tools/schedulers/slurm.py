@@ -4,10 +4,47 @@ import re
 import os
 import threading
 import time
-from .util import chcall, random_string, local_filename
+from cluster_tools.util import chcall, random_string, local_filename
+from .scheduled_executor import ScheduledExecutor
 
 LOG_FILE = local_filename("slurmpy.log")
 OUTFILE_FMT = local_filename("slurmpy.stdout.{}.log")
+
+
+SLURM_STATES = {
+    "Failure": [
+        "CANCELLED",
+        "BOOT_FAIL",
+        "DEADLINE",
+        "FAILED",
+        "NODE_FAIL",
+        "OUT_OF_MEMORY",
+        "PREEMPTED",
+        "STOPPED",
+        "TIMEOUT"
+    ],
+    "Success": [
+        "COMPLETED"
+    ],
+    "Ignore": [
+        "RUNNING",
+        "CONFIGURING",
+        "COMPLETING",
+        "PENDING",
+        "RESV_DEL_HOLD",
+        "REQUEUE_FED",
+        "REQUEUE_HOLD",
+        "REQUEUED",
+        "RESIZING"
+    ],
+    "Unclear": [
+        "SUSPENDED",
+        "REVOKED",
+        "SIGNALING",
+        "SPECIAL_EXIT",
+        "STAGE_OUT"
+    ]
+}
 
 
 def submit_text(job, job_name):
@@ -55,3 +92,7 @@ def submit(
     )
 
     return submit_text("\n".join(script_lines), job_name)
+
+class SlurmExecutor(ScheduledExecutor):
+
+    pass
