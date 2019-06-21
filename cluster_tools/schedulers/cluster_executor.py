@@ -1,13 +1,24 @@
 from concurrent import futures
 import os
-from cluster_tools.util import random_string, local_filename, call, FileWaitThread
+from cluster_tools.util import random_string, local_filename, FileWaitThread
 import threading
 import signal
 import sys
 from cluster_tools import pickling
 import time
 from abc import ABC, abstractmethod
-from .remote import INFILE_FMT, OUTFILE_FMT
+from cluster_tools.remote import INFILE_FMT, OUTFILE_FMT
+import logging
+from typing import Union
+
+class RemoteException(Exception):
+    def __init__(self, error, job_id):
+        self.error = error
+        self.job_id = job_id
+
+    def __str__(self):
+        return str(self.job_id) + "\n" + self.error.strip()
+
 
 class ClusterExecutor(futures.Executor):
     """Futures executor for executing jobs on a cluster."""
@@ -37,7 +48,7 @@ class ClusterExecutor(futures.Executor):
         self.jobs_empty_cond = threading.Condition(self.jobs_lock)
         self.keep_logs = keep_logs
 
-        self.wait_thread = FileWaitThread(self._completion)
+        self.wait_thread = FileWaitThread(self._completion, self)
         self.wait_thread.start()
 
         signal.signal(signal.SIGINT, self.handle_kill)
@@ -47,11 +58,18 @@ class ClusterExecutor(futures.Executor):
         if "logging_config" in kwargs:
             self.meta_data["logging_config"] = kwargs["logging_config"]
 
+
     def handle_kill(self,signum, frame):
       self.wait_thread.stop()
       job_ids = ",".join(str(id) for id in self.jobs.keys())
-      print("A termination signal was registered. The following jobs on slurm are still running:\n{}".format(job_ids))
+      print("A termination signal was registered. The following jobs are still running on the cluster:\n{}".format(job_ids))
       sys.exit(130)
+
+
+    @abstractmethod
+    def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
+        pass
+
 
     def _start(self, workerid, job_count=None, job_name=None):
         """Start a job with the given worker ID and return an ID
@@ -156,7 +174,7 @@ class ClusterExecutor(futures.Executor):
         with self.jobs_lock:
             self.jobs[jobid] = (fut, workerid)
 
-        fut.slurm_jobid = jobid
+        fut.cluster_jobid = jobid
         return fut
 
     def map_to_futures(self, fun, allArgs):
@@ -201,8 +219,8 @@ class ClusterExecutor(futures.Executor):
                     OUTFILE_FMT % workerid_with_index, jobid_with_index
                 )
 
-                fut.slurm_jobid = jobid
-                fut.slurm_jobindex = index
+                fut.cluster_jobid = jobid
+                fut.cluster_jobindex = index
 
                 self.jobs[jobid_with_index] = (fut, workerid_with_index)
 
@@ -223,7 +241,7 @@ class ClusterExecutor(futures.Executor):
     def map(self, func, args, timeout=None, chunksize=None):
         if chunksize is not None:
             logging.warning(
-                "The provided chunksize parameter is ignored by SlurmExecutor."
+                "The provided chunksize parameter is ignored by ClusterExecutor."
             )
 
         start_time = time.time()

@@ -4,8 +4,11 @@ import re
 import os
 import threading
 import time
-from cluster_tools.util import chcall, random_string, local_filename
+from cluster_tools.util import chcall, random_string, local_filename, call
 from .cluster_executor import ClusterExecutor
+from cluster_tools.remote import OUTFILE_FMT
+import logging
+from typing import Union
 
 SLURM_STATES = {
     "Failure": [
@@ -61,7 +64,7 @@ def submit_text(job, job_name):
 
 class SlurmExecutor(ClusterExecutor):
 
-    def format_log_file_name(jobid):
+    def format_log_file_name(self, jobid):
         return local_filename("slurmpy.stdout.{}.log").format(str(jobid))
 
     def inner_submit(
@@ -93,3 +96,37 @@ class SlurmExecutor(ClusterExecutor):
         )
 
         return submit_text("\n".join(script_lines), job_name)
+
+
+    def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
+
+        # If the output file was not found, we determine the job status so that
+        # we can recognize jobs which failed hard (in this case, they don't produce output files)
+        stdout, _, exit_code = call("scontrol show job {}".format(job_id))
+
+        if exit_code != 0:
+            logging.error(
+                "Couldn't call scontrol to determine job's status. {}. Continuing to poll for output file. This could be an indicator for a failed job which was already cleaned up from the slurm db. If this is the case, the process will hang forever."
+            )
+            return "ignore"
+        else:
+            job_state_search = re.search('JobState=([a-zA-Z_]*)', str(stdout))
+
+            if job_state_search:
+                job_state = job_state_search.group(1)
+
+                if job_state in SLURM_STATES["Failure"]:
+                    return "failed"
+                elif job_state in SLURM_STATES["Ignore"]:
+                    return "ignore"
+                elif job_state in SLURM_STATES["Unclear"]:
+                    logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_state))
+                    return "ignore"
+                elif job_state in SLURM_STATES["Success"]:
+                    return "completed"
+                else:
+                    logging.error("Unhandled slurm job state? {}".format(job_state))
+                    return "ignore"
+            else:
+                logging.error("Could not extract slurm job state? {}".format(stdout[0:10]))
+                return "ignore"

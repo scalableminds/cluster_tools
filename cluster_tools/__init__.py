@@ -3,22 +3,10 @@ from concurrent.futures import ProcessPoolExecutor
 import os
 import sys
 import threading
-from .schedulers import slurm
+from .schedulers.slurm import SlurmExecutor
 from .util import random_string, call
 from . import pickling
-import logging
 import importlib
-import re
-
-class RemoteException(Exception):
-    def __init__(self, error, job_id):
-        self.error = error
-        self.job_id = job_id
-
-    def __str__(self):
-        return str(self.job_id) + "\n" + self.error.strip()
-
-
 
 def get_existent_kwargs_subset(whitelist, kwargs):
     new_kwargs = {}
@@ -78,7 +66,7 @@ class PickleExecutor(WrappedProcessPoolExecutor):
 
 def get_executor(environment, **kwargs):
     if environment == "slurm":
-        return slurm.SlurmExecutor(**kwargs)
+        return SlurmExecutor(**kwargs)
     elif environment == "multiprocessing":
         return WrappedProcessPoolExecutor(**kwargs)
     elif environment == "sequential":
