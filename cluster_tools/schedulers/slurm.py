@@ -70,7 +70,6 @@ class SlurmExecutor(ClusterExecutor):
     def inner_submit(
         self,
         cmdline,
-        outpath_fmt=OUTFILE_FMT,
         job_name=None,
         additional_setup_lines=[],
         job_count=None,
@@ -78,7 +77,7 @@ class SlurmExecutor(ClusterExecutor):
         """Starts a Slurm job that runs the specified shell command line.
         """
 
-        outpath = outpath_fmt.format("%j" if job_count is None else "%A.%a")
+        log_path = self.format_log_file_name("%j" if job_count is None else "%A.%a")
 
         job_resources_lines = []
         if self.job_resources is not None:
@@ -90,7 +89,7 @@ class SlurmExecutor(ClusterExecutor):
             job_array_line = "#SBATCH --array=0-{}".format(job_count - 1)
 
         script_lines = (
-            ["#!/bin/sh", "#SBATCH --output={}".format(outpath), job_array_line]
+            ["#!/bin/sh", "#SBATCH --output={}".format(log_path), job_array_line]
             + job_resources_lines
             + [*additional_setup_lines, "srun {}".format(cmdline)]
         )
