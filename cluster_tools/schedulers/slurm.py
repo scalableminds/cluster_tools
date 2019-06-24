@@ -96,7 +96,7 @@ class SlurmExecutor(ClusterExecutor):
             [
                 "#!/bin/sh",
                 "#SBATCH --output={}".format(log_path),
-                '--job-name "{}"'.format(job_name),
+                '#SBATCH --job-name "{}"'.format(job_name),
                 job_array_line
             ] + job_resources_lines
             + [*additional_setup_lines, "srun {}".format(cmdline)]
