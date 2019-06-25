@@ -5,6 +5,7 @@ import traceback
 from . import pickling
 import logging
 from cluster_tools.schedulers.slurm import SlurmExecutor
+from cluster_tools.schedulers.pbs import PBSExecutor
 from .file_formatters import INFILE_FMT, OUTFILE_FMT
 
 def format_remote_exc():
@@ -15,13 +16,16 @@ def format_remote_exc():
 
 def worker(workerid):
     """Called to execute a job on a remote host."""
+    executor = get_executor_class()
     try:
+        print("trying to read: ", INFILE_FMT % workerid)
+        print("working dir: ", os.getcwd())
         with open(INFILE_FMT % workerid, "rb") as f:
             indata = f.read()
         fun, args, kwargs, meta_data = pickling.loads(indata)
         setup_logging(meta_data)
-  
-        logging.info("Job computation started (jobid={}, workerid={}).".format(SlurmExecutor.get_current_job_id(), workerid))
+        
+        logging.info("Job computation started (jobid={}, workerid={}).".format(executor.get_current_job_id(), workerid))
         result = True, fun(*args, **kwargs)
         logging.info("Job computation completed.")
         out = pickling.dumps(result, True)
@@ -59,9 +63,14 @@ def setup_logging(meta_data):
     logging.info("Starting job computation...")
 
 
+def get_executor_class():
+    for executor in [SlurmExecutor, PBSExecutor]:
+        if executor.get_current_job_id() is not None:
+            return executor
+
 if __name__ == "__main__":
     worker_id = sys.argv[1]
-    task_id = SlurmExecutor.get_job_array_index()
+    task_id = get_executor_class().get_job_array_index()
     if task_id is not None:
         worker_id = worker_id + "_" + task_id
 

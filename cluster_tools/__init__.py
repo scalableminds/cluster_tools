@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 from .schedulers.slurm import SlurmExecutor
+from .schedulers.pbs import PBSExecutor
 from .util import random_string, call
 from . import pickling
 import importlib
@@ -67,6 +68,8 @@ class PickleExecutor(WrappedProcessPoolExecutor):
 def get_executor(environment, **kwargs):
     if environment == "slurm":
         return SlurmExecutor(**kwargs)
+    elif environment == "pbs":
+        return PBSExecutor(**kwargs)
     elif environment == "multiprocessing":
         return WrappedProcessPoolExecutor(**kwargs)
     elif environment == "sequential":

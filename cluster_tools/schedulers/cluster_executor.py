@@ -177,6 +177,12 @@ class ClusterExecutor(futures.Executor):
         fut.cluster_jobid = jobid
         return fut
 
+    def get_workerid_with_index(self, workerid, index):
+        return workerid + "_" + str(index)
+
+    def get_jobid_with_index(self, jobid, index): 
+        return str(jobid) + "_" + str(index)
+
     def map_to_futures(self, fun, allArgs):
         self.ensure_not_shutdown()
         allArgs = list(allArgs)
@@ -184,16 +190,15 @@ class ClusterExecutor(futures.Executor):
         futs = []
         workerid = random_string()
 
-        get_workerid_with_index = lambda index: workerid + "_" + str(index)
-
         # Submit jobs eagerly
         for index, arg in enumerate(allArgs):
             fut = futures.Future()
 
             # Start the job.
             funcser = pickling.dumps((fun, [arg], {}, self.meta_data), True)
-            infile_name = INFILE_FMT % get_workerid_with_index(index)
+            infile_name = INFILE_FMT % self.get_workerid_with_index(workerid, index)
 
+            print("dump to", INFILE_FMT % self.get_workerid_with_index(workerid, index))
             with open(infile_name, "wb") as f:
                 f.write(funcser)
 
@@ -202,7 +207,7 @@ class ClusterExecutor(futures.Executor):
         job_count = len(allArgs)
         job_name = fun.__name__
         jobid = self._start(workerid, job_count, job_name)
-        get_jobid_with_index = lambda index: str(jobid) + "_" + str(index)
+        
 
         if self.debug:
             print(
@@ -212,9 +217,9 @@ class ClusterExecutor(futures.Executor):
 
         with self.jobs_lock:
             for index, fut in enumerate(futs):
-                jobid_with_index = get_jobid_with_index(index)
+                jobid_with_index = self.get_jobid_with_index(jobid, index)
                 # Thread will wait for it to finish.
-                workerid_with_index = get_workerid_with_index(index)
+                workerid_with_index = self.get_workerid_with_index(workerid, index)
                 self.wait_thread.waitFor(
                     OUTFILE_FMT % workerid_with_index, jobid_with_index
                 )
