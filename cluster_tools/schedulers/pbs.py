@@ -15,7 +15,7 @@ PBS_STATES = {
     "Failure": [
     ],
     "Success": [
-        "C"  # Completed
+        "C",  # Completed
         "F"  # It can have failed too, but we will notice this when we don't find the pickle file
     ],
     "Ignore": [
@@ -84,7 +84,6 @@ class PBSExecutor(ClusterExecutor):
 
         job_array_line = ""
         if job_count is not None:
-            # -t in pbs 6
             job_array_line = "#PBS -t 0-{}".format(job_count - 1)
 
         script_lines = [
@@ -112,7 +111,7 @@ class PBSExecutor(ClusterExecutor):
 
         # If the output file was not found, we determine the job status so that
         # we can recognize jobs which failed hard (in this case, they don't produce output files)
-        stdout, _, exit_code = call("qstat -xf {}".format(job_id))
+        stdout, _, exit_code = call("qstat -f {}".format(job_id))
 
         if exit_code != 0:
             logging.error(
