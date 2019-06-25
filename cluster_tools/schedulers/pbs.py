@@ -13,13 +13,13 @@ from typing import Union
 # qstat vs. checkjob
 PBS_STATES = {
     "Failure": [
-        "E", # Job is exiting after having run ?
     ],
     "Success": [
-        "C"  # Completed?
+        "C"  # Completed
         "F"  # It can have failed too, but we will notice this when we don't find the pickle file
     ],
     "Ignore": [
+        "E", # Job is exiting after having run
         "H", # Job is held.
         "Q", # job is queued, eligable to run or routed.
         "R", # job is running.
@@ -28,7 +28,6 @@ PBS_STATES = {
         "S", # (Unicos only) job is suspend.
     ],
     "Unclear": [
-        
     ]
 }
 
@@ -40,7 +39,7 @@ def submit_text(job):
     filename = local_filename("_temp_{}.sh".format(random_string()))
     with open(filename, "w") as f:
         f.write(job)
-    jobid_desc, _ = chcall("qsub {}".format(filename))
+    jobid_desc, _ = chcall("qsub -V {}".format(filename))
     match = re.search("^[0-9]+", jobid_desc.decode("utf-8") )
     assert match is not None    
     jobid = match.group(0)
@@ -85,18 +84,20 @@ class PBSExecutor(ClusterExecutor):
 
         job_array_line = ""
         if job_count is not None:
-            job_array_line = "#PBS -J 0-{}".format(job_count - 1)
+            # -t in pbs 6
+            job_array_line = "#PBS -t 0-{}".format(job_count - 1)
 
         script_lines = [
             "#!/bin/sh",
             # "#PBS -j oe", # join output and error stream
             "#PBS -k oe", # keep output and error stream
-            "#PBS -o={}".format(log_path),
-            "#PBS -e={}".format(log_path),
+            "#PBS -o {}".format(log_path),
+            "#PBS -e {}".format(log_path),
             '#PBS -N "{}"'.format(job_name),
             job_array_line,
             *job_resources_lines,
             *additional_setup_lines,
+            'export PATH=$PBS_O_PATH',
             'cd $PBS_O_WORKDIR',
             "{}".format(cmdline)
         ]
@@ -112,7 +113,6 @@ class PBSExecutor(ClusterExecutor):
         # If the output file was not found, we determine the job status so that
         # we can recognize jobs which failed hard (in this case, they don't produce output files)
         stdout, _, exit_code = call("qstat -xf {}".format(job_id))
-
 
         if exit_code != 0:
             logging.error(
