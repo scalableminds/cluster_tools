@@ -180,7 +180,7 @@ class ClusterExecutor(futures.Executor):
     def get_workerid_with_index(self, workerid, index):
         return workerid + "_" + str(index)
 
-    def get_jobid_with_index(self, jobid, index): 
+    def get_jobid_with_index(self, jobid, index):
         return str(jobid) + "_" + str(index)
 
     def map_to_futures(self, fun, allArgs):
@@ -198,7 +198,6 @@ class ClusterExecutor(futures.Executor):
             funcser = pickling.dumps((fun, [arg], {}, self.meta_data), True)
             infile_name = INFILE_FMT % self.get_workerid_with_index(workerid, index)
 
-            print("dump to", INFILE_FMT % self.get_workerid_with_index(workerid, index))
             with open(infile_name, "wb") as f:
                 f.write(funcser)
 
