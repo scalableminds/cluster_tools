@@ -69,6 +69,9 @@ class SlurmExecutor(ClusterExecutor):
         return os.environ.get("SLURM_JOB_ID")
 
     def format_log_file_name(self, jobid):
+        # dirty workaround: job id can be a compound id (jobid_jobindex)
+        # which we always put into log files with jobid.jobindex format
+        jobid = jobid.replace("_", ".")
         return local_filename("slurmpy.stdout.{}.log").format(str(jobid))
 
     def inner_submit(
