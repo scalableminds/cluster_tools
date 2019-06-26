@@ -74,7 +74,7 @@ class PBSExecutor(ClusterExecutor):
 
         # if job_count is None else "$PBS_JOBID.$PBS_ARRAY_INDEX"
         # $PBS_JOBID will also include an array index if it's a job array
-        log_path = self.format_log_file_name("$PBS_JOBID.log")
+        log_path = self.format_log_file_name("$PBS_JOBID")
         print("log_path", log_path)
 
         job_resources_lines = []
@@ -86,14 +86,20 @@ class PBSExecutor(ClusterExecutor):
 
         job_array_line = ""
         if job_count is not None:
-            job_array_line = "#PBS -t 0-{}".format(job_count - 1)
+            if job_count == 1:
+                # Even though, the t range is inclusive on both ends, pbs doesn't like 0-0 as a parameter.
+                # Explicitly, listing the index works, though.
+                job_array_line = "#PBS -t 0"
+            else:
+                job_array_line = "#PBS -t 0-{}".format(job_count - 1)
+
 
         script_lines = [
             "#!/bin/sh",
-            # "#PBS -j oe", # join output and error stream
-            "#PBS -k oe", # keep output and error stream
-            "#PBS -o {}".format(log_path),
+            "#PBS -j oe", # join output and error stream
+            # Apparently, it's important to have the -e line before -o
             "#PBS -e {}".format(log_path),
+            "#PBS -o {}".format(log_path),
             '#PBS -N "{}"'.format(job_name),
             job_array_line,
             *job_resources_lines,
