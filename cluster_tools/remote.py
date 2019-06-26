@@ -70,8 +70,8 @@ def get_executor_class():
 
 if __name__ == "__main__":
     worker_id = sys.argv[1]
-    task_id = get_executor_class().get_job_array_index()
-    if task_id is not None:
-        worker_id = worker_id + "_" + task_id
+    job_array_index = get_executor_class().get_job_array_index()
+    if job_array_index is not None:
+        worker_id = worker_id + "_" + job_array_index
 
     worker(worker_id)

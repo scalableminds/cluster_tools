@@ -53,7 +53,7 @@ class PBSExecutor(ClusterExecutor):
 
     @staticmethod
     def get_job_array_index():
-        return os.environ.get("PBS_ARRAY_INDEX", None)
+        return os.environ.get("PBS_ARRAYID", None)
 
     @staticmethod
     def get_current_job_id():
@@ -72,7 +72,9 @@ class PBSExecutor(ClusterExecutor):
         """Starts a PBS job that runs the specified shell command line.
         """
 
-        log_path = self.format_log_file_name("$PBS_JOBID" if job_count is None else "$PBS_JOBID.$PBS_ARRAY_INDEX")
+        # if job_count is None else "$PBS_JOBID.$PBS_ARRAY_INDEX"
+        # $PBS_JOBID will also include an array index if it's a job array
+        log_path = self.format_log_file_name("$PBS_JOBID.log")
         print("log_path", log_path)
 
         job_resources_lines = []
