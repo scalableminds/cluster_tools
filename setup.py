@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 def _read(fn):
     path = os.path.join(os.path.dirname(__file__), fn)
@@ -14,7 +14,7 @@ setup(name='cluster_tools',
       license='MIT',
       platforms='ALL',
 
-      packages=['cluster_tools'],
+      packages=find_packages(),
       install_requires=[
           'cloudpickle',
           'futures',
