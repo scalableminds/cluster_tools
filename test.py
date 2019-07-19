@@ -26,7 +26,7 @@ def get_executors():
         cluster_tools.get_executor("multiprocessing", max_workers=5),
         cluster_tools.get_executor("sequential"),
         cluster_tools.get_executor("test_pickling"),
-        cluster_tools.get_executor("pbs"),
+        # cluster_tools.get_executor("pbs"),
     ]
 
 
