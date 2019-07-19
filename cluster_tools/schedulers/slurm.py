@@ -113,7 +113,7 @@ class SlurmExecutor(ClusterExecutor):
 
         # If the output file was not found, we determine the job status so that
         # we can recognize jobs which failed hard (in this case, they don't produce output files)
-        stdout, _, exit_code = call("_scontrol show job {}".format(job_id))
+        stdout, _, exit_code = call("scontrol show job {}".format(job_id))
         stdout = stdout.decode("utf8")
 
         if exit_code == 0:
@@ -140,17 +140,13 @@ class SlurmExecutor(ClusterExecutor):
         
         logging.warn("job_states: {}".format(job_states))
         if matches_states(SLURM_STATES["Failure"]):
-            logging.warn("found state to be failed")
             return "failed"
         elif matches_states(SLURM_STATES["Ignore"]):
-            logging.warn("found state to be ignore")
             return "ignore"
         elif matches_states(SLURM_STATES["Unclear"]):
             logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_state))
-            logging.warn("found state to be ignore")
             return "ignore"
         elif matches_states(SLURM_STATES["Success"]):
-            logging.warn("found state to be completed")
             return "completed"
         else:
             logging.error("Unhandled slurm job state? {}".format(job_states))
