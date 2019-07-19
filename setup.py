@@ -6,7 +6,7 @@ def _read(fn):
     return open(path).read()
 
 setup(name='cluster_tools',
-      version='v1.27',
+      version='v1.28',
       description='Utility library for easily distributing code execution on clusters',
       author='scalableminds',
       author_email='hello@scalableminds.com',
@@ -17,7 +17,7 @@ setup(name='cluster_tools',
       packages=find_packages(),
       install_requires=[
           'cloudpickle',
-          'futures',
+          'futures; python_version == "2.7"'
       ],
 
       classifiers=[
