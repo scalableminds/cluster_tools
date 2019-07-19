@@ -114,7 +114,7 @@ class SlurmExecutor(ClusterExecutor):
         # If the output file was not found, we determine the job status so that
         # we can recognize jobs which failed hard (in this case, they don't produce output files)
         stdout, _, exit_code = call("_scontrol show job {}".format(job_id))
-        stdout = str(stdout)
+        stdout = stdout.decode("utf8")
 
         if exit_code == 0:
             job_state_search = re.search('JobState=([a-zA-Z_]*)', str(stdout))
@@ -124,9 +124,10 @@ class SlurmExecutor(ClusterExecutor):
                 logging.error("Could not extract slurm job state? {}".format(stdout[0:10]))
         else:
             stdout, _, exit_code = call("sacct -j {} -o State -P".format(job_id))
+            stdout = stdout.decode("utf8")
 
             if exit_code == 0:
-                job_states = stdout.split(b"\n")[1:]
+                job_states = stdout.split("\n")[1:]
         
         if len(job_states) == 0:
             logging.error(
