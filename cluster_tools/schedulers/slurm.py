@@ -137,8 +137,7 @@ class SlurmExecutor(ClusterExecutor):
 
         def matches_states(slurm_states):
             return len(list(set(job_states) & set(slurm_states))) > 0
-        
-        logging.warn("job_states: {}".format(job_states))
+
         if matches_states(SLURM_STATES["Failure"]):
             return "failed"
         elif matches_states(SLURM_STATES["Ignore"]):
