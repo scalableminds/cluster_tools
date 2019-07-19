@@ -143,7 +143,7 @@ class SlurmExecutor(ClusterExecutor):
         elif matches_states(SLURM_STATES["Ignore"]):
             return "ignore"
         elif matches_states(SLURM_STATES["Unclear"]):
-            logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_state))
+            logging.warn("The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(job_id, job_states))
             return "ignore"
         elif matches_states(SLURM_STATES["Success"]):
             return "completed"
