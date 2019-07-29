@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build:
+  build_test_deploy:
     machine: true
     environment:
       USER_NAME: circleci
@@ -75,3 +75,12 @@ jobs:
             else
               echo "Skipping publishing on non-tag"
             fi
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      - build_test_deploy:
+          filters:
+            tags:
+              only: /.*/
