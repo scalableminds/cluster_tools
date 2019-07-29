@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build_test_deploy:
+  build:
     machine: true
     environment:
       USER_NAME: circleci
@@ -80,7 +80,7 @@ workflows:
   version: 2
   default:
     jobs:
-      - build_test_deploy:
+      - build:
           filters:
             tags:
               only: /.*/
