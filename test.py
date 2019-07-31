@@ -45,7 +45,8 @@ def test_uncaught_warning():
     logger = logging.getLogger('')
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
-    os.remove(log_file_name)
+    if os.path.exists(log_file_name):
+        os.remove(log_file_name)
     fh = logging.FileHandler(log_file_name)
     logger.addHandler(fh)
 
