@@ -1,6 +1,6 @@
 from concurrent import futures
 import os
-from cluster_tools.util import random_string, local_filename, FileWaitThread, enrich_futures_with_uncaught_warning, get_function_name
+from cluster_tools.util import random_string, local_filename, FileWaitThread, enrich_future_with_uncaught_warning, get_function_name
 import threading
 import signal
 import sys
@@ -151,7 +151,7 @@ class ClusterExecutor(futures.Executor):
 
     def create_enriched_future(self):
         fut = futures.Future()
-        enrich_futures_with_uncaught_warning(fut)
+        enrich_future_with_uncaught_warning(fut)
         return fut
 
     def submit(self, fun, *args, **kwargs):

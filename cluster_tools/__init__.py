@@ -5,7 +5,7 @@ import sys
 import threading
 from .schedulers.slurm import SlurmExecutor
 from .schedulers.pbs import PBSExecutor
-from .util import random_string, call, enrich_futures_with_uncaught_warning
+from .util import random_string, call, enrich_future_with_uncaught_warning
 from . import pickling
 import importlib
 
@@ -28,7 +28,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
     def submit(self, *args, **kwargs):
 
         fut = super().submit(*args, **kwargs)
-        enrich_futures_with_uncaught_warning(fut)
+        enrich_future_with_uncaught_warning(fut)
         return fut
 
     def map_unordered(self, func, args):

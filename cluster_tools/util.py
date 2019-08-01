@@ -164,14 +164,14 @@ def get_function_name(fun):
     # When using functools.partial, __name__ does not exist
     return fun.__name__ if hasattr(fun, "__name__") else "<unknown function>"
 
-def enrich_futures_with_uncaught_warning(f):
+def enrich_future_with_uncaught_warning(f):
     """
     Hooks into relevant methods of the given future so that we can detect
     whether someone handled the exception potentially thrown by the future.
     """
-    methods = ["cancel", "result", "exception", "add_done_callback"]
+    methods_to_hook = ["cancel", "result", "exception", "add_done_callback"]
 
-    def warn(future):
+    def warn_if_exception_not_handled(future):
         # By calling exception here, we are increasing cluster_tools_handler_count by 1
         maybe_exception = future.exception()
         if maybe_exception is not None:
@@ -181,9 +181,12 @@ def enrich_futures_with_uncaught_warning(f):
     if not hasattr(f, "is_wrapped_by_cluster_tools"):
         f.is_wrapped_by_cluster_tools = True
         f.cluster_tools_handler_count = 0
-        f.add_done_callback(warn)
+        f.add_done_callback(warn_if_exception_not_handled)
 
         def hook_method(m):
+            # Ensure that cluster_tools_handler_count is creased when
+            # method m is called
+
             old_method = getattr(f, m)
 
             def new_method(self, *args, **kwargs):
@@ -192,5 +195,5 @@ def enrich_futures_with_uncaught_warning(f):
 
             setattr(f, m, types.MethodType(new_method, f))
 
-        for m in methods:
+        for m in methods_to_hook:
             hook_method(m)
