@@ -112,7 +112,7 @@ class PBSExecutor(ClusterExecutor):
             "{}".format(cmdline)
         ]
 
-        return submit_text("\n".join(script_lines))
+        return self.submit_text("\n".join(script_lines))
 
 
     def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
