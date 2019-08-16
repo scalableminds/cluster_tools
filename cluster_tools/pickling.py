@@ -38,7 +38,10 @@ def file_path_to_absolute_module(file_path):
 
 @warn_after("pickle.dumps", WARNING_TIMEOUT)
 def dumps(*args, **kwargs):
-    pickled = pickle_strategy.dumps(*args, protocol=4, **kwargs)
+    # Protocol 4 allows to serialize objects larger than 4 GiB, but is only supported
+    # beginning from Python 3.4
+    protocol = 4 if sys.version_info[0] >= 3 and sys.version_info[1] >= 4 else 3
+    pickled = pickle_strategy.dumps(*args, protocol=protocol, **kwargs)
     if use_cloudpickle:
         return pickled
 
