@@ -28,14 +28,14 @@ def worker(workerid):
         logging.info("Job computation started (jobid={}, workerid={}).".format(executor.get_current_job_id(), workerid))
         result = True, fun(*args, **kwargs)
         logging.info("Job computation completed.")
-        out = pickling.dumps(result, True)
+        out = pickling.dumps(result)
 
     except Exception as e:
         print(traceback.format_exc())
 
         result = False, format_remote_exc()
         logging.info("Job computation failed.")
-        out = pickling.dumps(result, False)
+        out = pickling.dumps(result)
 
 
     destfile = OUTFILE_FMT % workerid

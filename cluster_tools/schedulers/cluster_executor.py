@@ -163,7 +163,7 @@ class ClusterExecutor(futures.Executor):
         # Start the job.
         workerid = random_string()
 
-        funcser = pickling.dumps((fun, args, kwargs, self.meta_data), True)
+        funcser = pickling.dumps((fun, args, kwargs, self.meta_data))
         with open(INFILE_FMT % workerid, "wb") as f:
             f.write(funcser)
 
@@ -200,7 +200,7 @@ class ClusterExecutor(futures.Executor):
             fut = self.create_enriched_future()
 
             # Start the job.
-            funcser = pickling.dumps((fun, [arg], {}, self.meta_data), True)
+            funcser = pickling.dumps((fun, [arg], {}, self.meta_data))
             infile_name = INFILE_FMT % self.get_workerid_with_index(workerid, index)
 
             with open(infile_name, "wb") as f:
