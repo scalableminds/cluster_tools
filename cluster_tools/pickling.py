@@ -38,7 +38,7 @@ def file_path_to_absolute_module(file_path):
 
 @warn_after("pickle.dumps", WARNING_TIMEOUT)
 def dumps(*args, **kwargs):
-    pickled = pickle_strategy.dumps(*args, **kwargs)
+    pickled = pickle_strategy.dumps(*args, protocol=4, **kwargs)
     if use_cloudpickle:
         return pickled
 
