@@ -22,10 +22,11 @@ def worker(workerid, cfut_dir):
         print("trying to read: ", input_file_name)
         print("working dir: ", os.getcwd())
         with open(input_file_name, "rb") as f:
-            indata = f.read()
-        fun, args, kwargs, meta_data = pickling.loads(indata)
+            fun, args, kwargs, meta_data = pickling.load(f)
+
         if type(fun) == str:
-            fun = pickling.load(fun)
+            with open(fun, "rb") as function_file:
+                fun = pickling.load(function_file)
 
         setup_logging(meta_data)
         
