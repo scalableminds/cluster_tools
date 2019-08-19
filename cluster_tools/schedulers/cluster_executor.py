@@ -212,12 +212,16 @@ class ClusterExecutor(futures.Executor):
         futs = []
         workerid = random_string()
 
+        pickled_function_path = self.format_infile_name(self.get_workerid_with_index(workerid, "function"))
+        with open(pickled_function_path, "wb") as file:
+            pickling.dump(fun, file)
+
         # Submit jobs eagerly
         for index, arg in enumerate(allArgs):
             fut = self.create_enriched_future()
 
             # Start the job.
-            funcser = pickling.dumps((fun, [arg], {}, self.meta_data))
+            funcser = pickling.dumps((pickled_function_path, [arg], {}, self.meta_data))
             infile_name = self.format_infile_name(self.get_workerid_with_index(workerid, index))
 
             with open(infile_name, "wb") as f:

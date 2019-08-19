@@ -24,6 +24,9 @@ def worker(workerid, cfut_dir):
         with open(input_file_name, "rb") as f:
             indata = f.read()
         fun, args, kwargs, meta_data = pickling.loads(indata)
+        if type(fun) == str:
+            fun = pickling.load(fun)
+
         setup_logging(meta_data)
         
         logging.info("Job computation started (jobid={}, workerid={}).".format(executor.get_current_job_id(), workerid))
