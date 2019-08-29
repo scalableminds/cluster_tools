@@ -54,6 +54,19 @@ def dump(*args, **kwargs):
 def loads(*args, **kwargs):
     return pickle_strategy.loads(*args, **kwargs)
 
-@warn_after("pickle.load", WARNING_TIMEOUT)
-def load(*args, **kwargs):
-    return pickle_strategy.load(*args, **kwargs)
+# @warn_after("pickle.load", WARNING_TIMEOUT)
+# def load(*args, **kwargs):
+#     return pickle_strategy.load(*args, **kwargs)
+
+
+class RenameUnpickler(pickle_strategy.Unpickler):
+    def find_class(self, module, name):
+        renamed_module = module
+        custom_main_path = os.environ.get("cfut_main_path", None)
+        if module == "__main__" and custom_main_path is not None:
+            renamed_module = custom_main_path
+
+        return super(RenameUnpickler, self).find_class(renamed_module, name)
+
+def load(f):
+    return RenameUnpickler(f).load()

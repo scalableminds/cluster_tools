@@ -5,6 +5,7 @@ import threading
 import signal
 import sys
 from cluster_tools import pickling
+from cluster_tools.pickling import file_path_to_absolute_module
 import time
 from abc import ABC, abstractmethod
 from cluster_tools.file_formatters import format_infile_name, format_outfile_name
@@ -81,6 +82,9 @@ class ClusterExecutor(futures.Executor):
         identifying the new job. The job should run ``python -m
         cfut.remote <workerid>.
         """
+
+        os.environ["cfut_main_path"] = file_path_to_absolute_module(sys.argv[0])
+
         return self.inner_submit(
             f"{sys.executable} -m cluster_tools.remote {workerid} {self.cfut_dir}",
             job_name=self.job_name if self.job_name is not None else job_name,
