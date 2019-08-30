@@ -61,12 +61,14 @@ def loads(*args, **kwargs):
 
 class RenameUnpickler(pickle_strategy.Unpickler):
     def find_class(self, module, name):
-        renamed_module = module
-        custom_main_path = os.environ.get("cfut_main_path", None)
-        if module == "__main__" and custom_main_path is not None:
-            renamed_module = custom_main_path
+        # renamed_module = module
+        # custom_main_path = os.environ.get("cfut_main_path", None)
+        if module == "__main__" and self.custom_main_path is not None:
+            renamed_module = self.custom_main_path
 
         return super(RenameUnpickler, self).find_class(renamed_module, name)
 
-def load(f):
-    return RenameUnpickler(f).load()
+def load(f, custom_main_path=None):
+    unpickler = RenameUnpickler(f)
+    unpickler.custom_main_path = custom_main_path
+    return unpickler.load()
