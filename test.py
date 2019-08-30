@@ -197,7 +197,7 @@ def test_slurm_cfut_dir():
         assert future.result() == 4
 
     assert os.path.exists(cfut_dir)
-    assert len(os.listdir(cfut_dir)) == 1
+    assert len(os.listdir(cfut_dir)) == 2
 
 
 def test_executor_args():
