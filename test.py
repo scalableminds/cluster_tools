@@ -277,6 +277,8 @@ def test_dereferencing_main():
     with cluster_tools.get_executor("slurm", debug=True, job_resources={"mem": "10M"}) as executor:
         fut = executor.submit(deref_fun_helper, (TestClass, TestClass(), 1, 2))
         fut.result()
+        fut = executor.map(deref_fun_helper, [(TestClass, TestClass(), 1, 2)])
+        fut.result()
 
 if __name__ == "__main__":
     # Validate that slurm_executor.submit also works when being called from a __main__ module
