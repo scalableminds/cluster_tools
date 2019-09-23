@@ -278,7 +278,7 @@ def test_dereferencing_main():
         fut = executor.submit(deref_fun_helper, (TestClass, TestClass(), 1, 2))
         fut.result()
         futs = executor.map_to_futures(deref_fun_helper, [(TestClass, TestClass(), 1, 2)])
-        fut[0].result()
+        futs[0].result()
 
 if __name__ == "__main__":
     # Validate that slurm_executor.submit also works when being called from a __main__ module
