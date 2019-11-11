@@ -352,3 +352,6 @@ class ClusterExecutor(futures.Executor):
         # by the done_callback we attached earlier.
         tailer.follow(2)
         return fut.result()
+
+    def get_pending_tasks(self):
+        return []
