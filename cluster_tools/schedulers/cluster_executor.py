@@ -7,7 +7,7 @@ import sys
 from cluster_tools import pickling
 from cluster_tools.pickling import file_path_to_absolute_module
 import time
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import logging
 from typing import Union
 from ..util import local_filename
@@ -353,5 +353,6 @@ class ClusterExecutor(futures.Executor):
         tailer.follow(2)
         return fut.result()
 
+    @abstractmethod
     def get_pending_tasks(self):
-        return []
+        pass
