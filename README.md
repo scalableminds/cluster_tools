@@ -1,6 +1,7 @@
 # Cluster Tools
 
 [![CircleCI](https://circleci.com/gh/scalableminds/cluster_tools/tree/master.svg?style=svg)](https://circleci.com/gh/scalableminds/cluster_tools/tree/master)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fscalableminds%2Fcluster_tools.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fscalableminds%2Fcluster_tools?ref=badge_shield)
 
 This package provides python `Executor` classes for distributing tasks on a slurm cluster or via multi processing.
 
@@ -23,3 +24,7 @@ if __name__ == '__main__':
 ## Credits
 
 Thanks to [sampsyo/clusterfutures](https://github.com/sampsyo/clusterfutures) for providing the slurm core abstraction and [giovtorres/slurm-docker-cluster](https://github.com/giovtorres/slurm-docker-cluster) for providing the slurm docker environment which we use for CI based testing.
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fscalableminds%2Fcluster_tools.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fscalableminds%2Fcluster_tools?ref=badge_large)
