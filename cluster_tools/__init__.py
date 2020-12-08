@@ -27,7 +27,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
         # For the purpose of these cluster tools, it should make a significant difference
         # whether we use spawn or fork. However, TensorFlow is not fork-safe, see:
         # https://github.com/tensorflow/tensorflow/issues/5448#issuecomment-258934405
-        mp.set_start_method("spawn", force=True)
+        multiprocessing.set_start_method("spawn", force=True)
         ProcessPoolExecutor.__init__(self, **new_kwargs)
 
     def submit(self, *args, **kwargs):
