@@ -24,7 +24,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
     def __init__(self, **kwargs):
         new_kwargs = get_existent_kwargs_subset(PROCESS_POOL_KWARGS_WHITELIST, kwargs)
 
-        # For the purpose of these cluster tools, it should make a significant difference
+        # For the purpose of these cluster tools, it shouldn't make a significant difference
         # whether we use spawn or fork. However, TensorFlow is not fork-safe, see:
         # https://github.com/tensorflow/tensorflow/issues/5448#issuecomment-258934405
         multiprocessing.set_start_method("spawn", force=True)
