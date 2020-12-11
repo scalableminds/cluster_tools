@@ -26,7 +26,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
         new_kwargs = get_existent_kwargs_subset(PROCESS_POOL_KWARGS_WHITELIST, kwargs)
 
         self.did_overwrite_start_method = False
-        if "start_method" in kwargs is not None:
+        if kwargs.get("start_method", None) is not None:
             self.did_overwrite_start_method = True
             self.old_start_method = multiprocessing.get_start_method()
             start_method = kwargs["start_method"]

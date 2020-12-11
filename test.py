@@ -184,6 +184,9 @@ def test_map_with_spawn():
     with cluster_tools.get_executor("multiprocessing", max_workers=5) as executor:
         assert executor.submit(expect_fork).result(), "Multiprocessing should use fork by default"
 
+    with cluster_tools.get_executor("multiprocessing", max_workers=5, start_method=None) as executor:
+        assert executor.submit(expect_fork).result(), "Multiprocessing should use fork if start_method is None"
+
     with cluster_tools.get_executor("multiprocessing", max_workers=5, start_method="spawn") as executor:
         assert executor.submit(expect_spawn).result(), "Multiprocessing should use spawn if requested"
     
