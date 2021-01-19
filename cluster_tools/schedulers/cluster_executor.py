@@ -195,6 +195,7 @@ class ClusterExecutor(futures.Executor):
         That file will not be removed after the job has finished.
         """
         fut = self.create_enriched_future()
+        workerid = random_string()
 
         should_keep_output = False
         if "__cfut_options" in kwargs:
@@ -207,8 +208,6 @@ class ClusterExecutor(futures.Executor):
         self.ensure_not_shutdown()
 
         # Start the job.
-        workerid = random_string()
-
         serialized_function_info = pickling.dumps((fun, args, kwargs, self.meta_data, output_pickle_path))
         with open(self.format_infile_name(self.cfut_dir, workerid), "wb") as f:
             f.write(serialized_function_info)
@@ -264,6 +263,7 @@ class ClusterExecutor(futures.Executor):
         # Submit jobs eagerly
         for index, arg in enumerate(allArgs):
             fut = self.create_enriched_future()
+            workerid_with_index = self.get_workerid_with_index(workerid, index)
 
             if output_pickle_path_getter is None:
                 output_pickle_path = self.format_outfile_name(self.cfut_dir, workerid_with_index)
@@ -272,7 +272,7 @@ class ClusterExecutor(futures.Executor):
 
             # Start the job.
             serialized_function_info = pickling.dumps((pickled_function_path, [arg], {}, self.meta_data, output_pickle_path))
-            infile_name = self.format_infile_name(self.cfut_dir, self.get_workerid_with_index(workerid, index))
+            infile_name = self.format_infile_name(self.cfut_dir, workerid_with_index)
 
             with open(infile_name, "wb") as f:
                 f.write(serialized_function_info)
@@ -293,7 +293,6 @@ class ClusterExecutor(futures.Executor):
             for index, (fut, output_pickle_path) in enumerate(futs_with_output_paths):
                 jobid_with_index = self.get_jobid_with_index(jobid, index)
                 # Thread will wait for it to finish.
-                workerid_with_index = self.get_workerid_with_index(workerid, index)
 
                 outfile_name = output_pickle_path
                 self.wait_thread.waitFor(
