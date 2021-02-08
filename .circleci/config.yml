@@ -9,60 +9,60 @@ jobs:
       TZ: Europe/Berlin
     steps:
       - checkout
-      # - run:
-      #     name: Build/pull dockered-slurm image
-      #     command: |
-      #       cd ./dockered-slurm
+      - run:
+          name: Build/pull dockered-slurm image
+          command: |
+            cd ./dockered-slurm
 
-      #       # Build image
-      #       # docker build -t slurm-docker-cluster:17.02.11 .
-      #       # Pull image
-      #       docker pull giovtorres/slurm-docker-cluster:17.02.11
+            # Build image
+            # docker build -t slurm-docker-cluster:17.02.11 .
+            # Pull image
+            docker pull giovtorres/slurm-docker-cluster
 
-      #       docker-compose up -d
+            docker-compose up -d
 
-      #       # Register cluster (with retry)
-      #       for i in {1..5}; do
-      #         ./register_cluster.sh && s=0 && break || s=$?
-      #         sleep 10
-      #       done
+            # Register cluster (with retry)
+            for i in {1..5}; do
+              ./register_cluster.sh && s=0 && break || s=$?
+              sleep 10
+            done
 
-      #       # Run setup.py on all three nodes
-      #       docker exec slurmctld bash -c "cd /cluster_tools && python3 setup.py install"
-      #       docker exec c1 bash -c "cd /cluster_tools && python3 setup.py install"
-      #       docker exec c2 bash -c "cd /cluster_tools && python3 setup.py install"
-
-      # # - run:
-      # #     name: Setup PBS
-      # #     command: |
-      # #       /etc/init.d/pbs start
-      # #       . /etc/profile.d/pbs.sh
-
-      # #       qmgr -c "set server flatuid=true"
-      # #       qmgr -c "set server acl_roots+=root@*"
-      # #       qmgr -c "set server operators+=root@*"
-      # #       qmgr -c “s s job_history_enable=1”
+            # Run setup.py on all three nodes
+            docker exec slurmctld bash -c "cd /cluster_tools && python3 setup.py install"
+            docker exec c1 bash -c "cd /cluster_tools && python3 setup.py install"
+            docker exec c2 bash -c "cd /cluster_tools && python3 setup.py install"
 
       # - run:
-      #     name: Re-run setup
+      #     name: Setup PBS
       #     command: |
-      #       cd ./dockered-slurm
-      #       docker exec slurmctld bash -c "cd /cluster_tools && python3 setup.py install"
-      #       docker exec c1 bash -c "cd /cluster_tools && python3 setup.py install"
-      #       docker exec c2 bash -c "cd /cluster_tools && python3 setup.py install"
+      #       /etc/init.d/pbs start
+      #       . /etc/profile.d/pbs.sh
 
-      # - run:
-      #     name: Run pylint
-      #     command: |
-      #       cd ./dockered-slurm
-      #       docker exec slurmctld bash -c "cd /cluster_tools && python3 -m pylint cluster_tools/"
+      #       qmgr -c "set server flatuid=true"
+      #       qmgr -c "set server acl_roots+=root@*"
+      #       qmgr -c "set server operators+=root@*"
+      #       qmgr -c “s s job_history_enable=1”
 
-      # - run:
-      #     name: Run tests
-      #     command: |
-      #       cd ./dockered-slurm
-      #       docker exec slurmctld bash -c "cd /cluster_tools && python3 -m pytest -s test.py"
-      #       docker exec slurmctld bash -c "cd /cluster_tools && python3 test.py"
+      - run:
+          name: Re-run setup
+          command: |
+            cd ./dockered-slurm
+            docker exec slurmctld bash -c "cd /cluster_tools && python3 setup.py install"
+            docker exec c1 bash -c "cd /cluster_tools && python3 setup.py install"
+            docker exec c2 bash -c "cd /cluster_tools && python3 setup.py install"
+
+      - run:
+          name: Run pylint
+          command: |
+            cd ./dockered-slurm
+            docker exec slurmctld bash -c "cd /cluster_tools && python3 -m pylint cluster_tools/"
+
+      - run:
+          name: Run tests
+          command: |
+            cd ./dockered-slurm
+            docker exec slurmctld bash -c "cd /cluster_tools && python3 -m pytest -s test.py"
+            docker exec slurmctld bash -c "cd /cluster_tools && python3 test.py"
 
       - run:
           name: Publish python package
