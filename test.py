@@ -378,6 +378,7 @@ def test_dereferencing_main():
 def accept_high_mem(data):
     return len(data)
 
+@pytest.mark.skip(reason="This test is does not pass on the CI. Probably because the machine does not have enough RAM.")
 def test_high_ram_usage():
     very_long_string = ' ' * 10**6 * 2500
 
