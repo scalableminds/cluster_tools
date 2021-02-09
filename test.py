@@ -385,9 +385,9 @@ def test_high_ram_usage():
 
     with cluster_tools.get_executor("multiprocessing") as executor:
         fut1 = executor.submit(accept_high_mem, very_long_string, __cfut_options={"output_pickle_path": "/tmp/test.pickle"})
-        fut2 = executor.submit(accept_high_mem, very_long_string)
-        
         assert fut1.result() == len(very_long_string)
+        
+        fut2 = executor.submit(accept_high_mem, very_long_string)
         assert fut2.result() == len(very_long_string)
     
     del os.environ["MULTIPROCESSING_VIA_IO"]
