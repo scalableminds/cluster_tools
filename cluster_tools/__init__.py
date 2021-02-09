@@ -82,8 +82,13 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
 
         func = args[0]
         args = args[1:]
-        
-        dirpath = tempfile.mkdtemp()
+
+        opt_tmp_dir = os.environ.get("MULTIPROCESSING_VIA_IO_TMP_DIR")
+        if opt_tmp_dir is not None:
+            dirpath = tempfile.mkdtemp(dir=opt_tmp_dir)
+        else:
+            dirpath = tempfile.mkdtemp()
+
         output_pickle_path = Path(dirpath) / "jobdescription.pickle"
 
         with open(output_pickle_path, "wb") as file:

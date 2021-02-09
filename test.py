@@ -387,6 +387,7 @@ def test_high_ram_usage():
         fut1 = executor.submit(accept_high_mem, very_long_string, __cfut_options={"output_pickle_path": "/tmp/test.pickle"})
         assert fut1.result() == len(very_long_string)
         
+        os.environ["MULTIPROCESSING_VIA_IO_TMP_DIR"] = "."
         fut2 = executor.submit(accept_high_mem, very_long_string)
         assert fut2.result() == len(very_long_string)
     
