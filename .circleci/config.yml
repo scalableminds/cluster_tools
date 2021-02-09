@@ -15,9 +15,7 @@ jobs:
             cd ./dockered-slurm
 
             # Build image
-            # docker build -t slurm-docker-cluster:17.02.11 .
-            # Pull image
-            docker pull giovtorres/slurm-docker-cluster
+            docker build -t slurm-docker-cluster:latest .
 
             docker-compose up -d
 
