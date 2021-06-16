@@ -50,18 +50,21 @@ class SlurmExecutor(ClusterExecutor):
     def get_current_job_id():
         return os.environ.get("SLURM_JOB_ID")
 
-    def format_log_file_name(self, jobid):
+    @staticmethod
+    def format_log_file_name(jobid):
         return "slurmpy.stdout.{}.log".format(str(jobid))
 
-    def get_log_file_path(self):
-        job_id = self.get_current_job_id()
-        job_array_id = self.get_job_array_id()
-        job_array_index = self.get_job_array_index()
+    @classmethod
+    def get_log_file_path(cls, cfut_dir):
+        job_id = cls.get_current_job_id()
+        job_array_id = cls.get_job_array_id()
+        job_array_index = cls.get_job_array_index()
         return (
-            self.format_log_file_path(
+            cls.format_log_file_path(
+                cfut_dir,
                 job_id
                 if job_array_index is None
-                else f"{job_array_id}_{job_array_index}"
+                else f"{job_array_id}_{job_array_index}",
             )
             + ".debug"
         )
@@ -88,7 +91,9 @@ class SlurmExecutor(ClusterExecutor):
         """Starts a Slurm job that runs the specified shell command line.
         """
 
-        log_path = self.format_log_file_path("%j" if job_count is None else "%A_%a")
+        log_path = self.format_log_file_path(
+            self.cfut_dir, "%j" if job_count is None else "%A_%a"
+        )
 
         job_resources_lines = []
         if self.job_resources is not None:

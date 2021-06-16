@@ -59,7 +59,7 @@ def worker(workerid, job_array_index, cfut_dir):
             with open(fun, "rb") as function_file:
                 fun = pickling.load(function_file, custom_main_path)
 
-        setup_logging(meta_data, executor.get_log_file_path())
+        setup_logging(meta_data, executor.get_log_file_path(cfut_dir))
 
         logging.info(
             "Job computation started (jobid={}, workerid_with_idx={}).".format(

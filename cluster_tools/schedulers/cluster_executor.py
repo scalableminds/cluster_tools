@@ -122,18 +122,21 @@ class ClusterExecutor(futures.Executor):
         if self.keep_logs:
             return
 
-        outf = self.format_log_file_path(jobid)
+        outf = self.format_log_file_path(self.cfut_dir, jobid)
         self.files_to_clean_up.append(outf)
 
+    @staticmethod
     @abstractmethod
-    def format_log_file_name(self, jobid):
+    def format_log_file_name(jobid):
         pass
 
-    def format_log_file_path(self, jobid):
-        return os.path.join(self.cfut_dir, self.format_log_file_name(jobid))
+    @classmethod
+    def format_log_file_path(cls, cfut_dir, jobid):
+        return os.path.join(cfut_dir, cls.format_log_file_name(jobid))
 
+    @classmethod
     @abstractmethod
-    def get_log_file_path(self):
+    def get_log_file_path(self, cfut_dir):
         pass
 
     def get_temp_file_path(self, file_name):
@@ -173,7 +176,7 @@ class ClusterExecutor(futures.Executor):
             # Therefore, we don't try to deserialize pickling output.
             success = False
             result = "Job submission/execution failed. Please look into the log file at {}".format(
-                self.format_log_file_path(jobid)
+                self.format_log_file_path(self.cfut_dir, jobid)
             )
         else:
             with open(preliminary_outfile_name, "rb") as f:
@@ -423,7 +426,7 @@ class ClusterExecutor(futures.Executor):
         process. This method blocks as long as the future is not done.
         """
 
-        log_path = self.format_log_file_path(fut.cluster_jobid)
+        log_path = self.format_log_file_path(self.cfut_dir, fut.cluster_jobid)
         # Don't use a logger instance here, since the child process
         # probably already used a logger.
         log_callback = lambda s: sys.stdout.write(f"(jid={fut.cluster_jobid}) {s}")
