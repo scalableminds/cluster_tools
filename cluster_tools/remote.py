@@ -8,10 +8,12 @@ from cluster_tools.schedulers.slurm import SlurmExecutor
 from cluster_tools.schedulers.pbs import PBSExecutor
 from cluster_tools.util import with_preliminary_postfix
 
+
 def get_executor_class():
     for executor in [SlurmExecutor, PBSExecutor]:
         if executor.get_current_job_id() is not None:
             return executor
+
 
 def format_remote_exc():
     typ, value, tb = sys.exc_info()
@@ -27,10 +29,13 @@ def get_custom_main_path(workerid):
             custom_main_path = file.read()
     return custom_main_path
 
+
 def worker(workerid, job_array_index, cfut_dir):
     """Called to execute a job on a remote host."""
 
-    workerid_with_idx = worker_id + "_" + job_array_index if job_array_index is not None else workerid
+    workerid_with_idx = (
+        worker_id + "_" + job_array_index if job_array_index is not None else workerid
+    )
 
     executor = get_executor_class()
     try:
@@ -43,7 +48,9 @@ def worker(workerid, job_array_index, cfut_dir):
             unpickled_tuple = pickling.load(f, custom_main_path)
             if len(unpickled_tuple) == 4:
                 fun, args, kwargs, meta_data = unpickled_tuple
-                output_pickle_path = executor.format_outfile_name(cfut_dir, workerid_with_idx)
+                output_pickle_path = executor.format_outfile_name(
+                    cfut_dir, workerid_with_idx
+                )
             else:
                 assert len(unpickled_tuple) == 5, "Unexpected encoding"
                 fun, args, kwargs, meta_data, output_pickle_path = unpickled_tuple
@@ -52,9 +59,13 @@ def worker(workerid, job_array_index, cfut_dir):
             with open(fun, "rb") as function_file:
                 fun = pickling.load(function_file, custom_main_path)
 
-        setup_logging(meta_data)
-        
-        logging.info("Job computation started (jobid={}, workerid_with_idx={}).".format(executor.get_current_job_id(), workerid_with_idx))
+        setup_logging(meta_data, executor.get_log_file_path())
+
+        logging.info(
+            "Job computation started (jobid={}, workerid_with_idx={}).".format(
+                executor.get_current_job_id(), workerid_with_idx
+            )
+        )
         result = True, fun(*args, **kwargs)
         logging.info("Job computation completed.")
         out = pickling.dumps(result)
@@ -81,19 +92,32 @@ def worker(workerid, job_array_index, cfut_dir):
     logging.info("Pickle file renamed to {}.".format(destfile))
 
 
-def setup_logging(meta_data):
-    logging_config = meta_data.get("logging_config", {"level": logging.DEBUG, "format": "%(asctime)s %(levelname)s %(message)s"})
+def setup_logging(meta_data, log_file_path):
+    if "logging_setup_fn" in meta_data:
 
-    # Call basicConfig which is necessary for the logging to work.
-    logging.basicConfig(**logging_config)
+        meta_data["logging_setup_fn"](log_file_path)
+        logging.info("Using supplied logging_setup_fn to setup logging.")
+    else:
+        logging_config = meta_data.get(
+            "logging_config",
+            {"level": logging.DEBUG, "format": "%(asctime)s %(levelname)s %(message)s"},
+        )
 
-    # It can happen that the pickled logger was already initialized. In this case,
-    # the above basicConfig call was a noop. Therefore, we have to set the level explicitly.
-    logger = logging.getLogger()
-    if "level" in logging_config:
-        logger.setLevel(logging_config["level"])
+        # Call basicConfig which is necessary for the logging to work.
+        logging.basicConfig(**logging_config)
 
-    logging.info("Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(logging_config))
+        # It can happen that the pickled logger was already initialized. In this case,
+        # the above basicConfig call was a noop. Therefore, we have to set the level explicitly.
+        logger = logging.getLogger()
+        if "level" in logging_config:
+            logger.setLevel(logging_config["level"])
+
+        logging.info(
+            "Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(
+                logging_config
+            )
+        )
+
     logging.info("Starting job computation...")
 
 
