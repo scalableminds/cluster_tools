@@ -59,14 +59,9 @@ class SlurmExecutor(ClusterExecutor):
         job_id = cls.get_current_job_id()
         job_array_id = cls.get_job_array_id()
         job_array_index = cls.get_job_array_index()
-        return (
-            cls.format_log_file_path(
-                cfut_dir,
-                job_id
-                if job_array_index is None
-                else f"{job_array_id}_{job_array_index}",
-            )
-            + ".debug"
+        return cls.format_log_file_path(
+            cfut_dir,
+            job_id if job_array_index is None else f"{job_array_id}_{job_array_index}",
         )
 
     def submit_text(self, job):

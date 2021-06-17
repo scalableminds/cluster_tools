@@ -46,7 +46,7 @@ class PBSExecutor(ClusterExecutor):
     @classmethod
     def get_log_file_path(cls, cfut_dir):
         job_id = cls.get_current_job_id()
-        return cls.format_log_file_path(cfut_dir, job_id) + ".debug"
+        return cls.format_log_file_path(cfut_dir, job_id)
 
     def submit_text(self, job):
         """Submits a PBS job represented as a job file string. Returns
