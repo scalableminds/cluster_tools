@@ -1,5 +1,8 @@
 FROM centos:7
 
+ENV LC_ALL=en_US.utf8
+ENV LANG=en_US.utf8
+
 LABEL org.opencontainers.image.source="https://github.com/giovtorres/slurm-docker-cluster" \
       org.opencontainers.image.title="slurm-docker-cluster" \
       org.opencontainers.image.description="Slurm Docker cluster on CentOS 7" \
