@@ -91,7 +91,7 @@ COPY slurmdbd.conf /etc/slurm/slurmdbd.conf
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN python3 -m pip install pylint black
+RUN python3 -m pip install pylint black==19.3b0
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
