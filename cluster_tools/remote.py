@@ -95,10 +95,7 @@ def worker(workerid, job_array_index, cfut_dir):
 def setup_logging(meta_data, log_file_path):
     if "logging_setup_fn" in meta_data:
 
-        # As this is the file the cluster_tools themselves are logging to, append a suffix
-        # TODO: This should probably be done by the caller, but then what if the caller doesn't
-        # change the log file name - then sbatch and the caller would log to the file
-        meta_data["logging_setup_fn"](log_file_path + ".debug")
+        meta_data["logging_setup_fn"](log_file_path)
         logging.info("Using supplied logging_setup_fn to setup logging.")
     else:
         logging_config = meta_data.get(
