@@ -40,13 +40,12 @@ class PBSExecutor(ClusterExecutor):
         return os.environ.get("PBS_JOBID")
 
     @staticmethod
-    def format_log_file_name(jobid):
-        return "pbs.stdout.{}.log".format(str(jobid))
+    def format_log_file_name(jobid, suffix=".stdout"):
+        return "pbs.{}.log{}".format(str(jobid), suffix)
 
     @classmethod
-    def get_log_file_path(cls, cfut_dir):
-        job_id = cls.get_current_job_id()
-        return cls.format_log_file_path(cfut_dir, job_id)
+    def get_job_id_string(cls):
+        return cls.get_current_job_id()
 
     def submit_text(self, job):
         """Submits a PBS job represented as a job file string. Returns

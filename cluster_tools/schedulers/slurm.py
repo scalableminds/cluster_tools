@@ -51,11 +51,11 @@ class SlurmExecutor(ClusterExecutor):
         return os.environ.get("SLURM_JOB_ID")
 
     @staticmethod
-    def format_log_file_name(jobid):
-        return "slurmpy.stdout.{}.log".format(str(jobid))
+    def format_log_file_name(jobid, suffix=".stdout"):
+        return "slurmpy.{}.log{}".format(str(jobid), suffix)
 
     @classmethod
-    def get_log_file_path(cls, cfut_dir):
+    def get_job_id_string(cls):
         job_id = cls.get_current_job_id()
         job_array_id = cls.get_job_array_id()
         job_array_index = cls.get_job_array_index()
@@ -65,7 +65,7 @@ class SlurmExecutor(ClusterExecutor):
         job_id_string = (
             job_id if job_array_index is None else f"{job_array_id}_{job_array_index}"
         )
-        return cls.format_log_file_path(cfut_dir, job_id_string)
+        return job_id_string
 
     def submit_text(self, job):
         """Submits a Slurm job represented as a job file string. Returns
@@ -91,7 +91,7 @@ class SlurmExecutor(ClusterExecutor):
 
         # These place holders will be replaced by sbatch, see https://slurm.schedmd.com/sbatch.html#SECTION_%3CB%3Efilename-pattern%3C/B%3E
         # This variable needs to be kept in sync with the job_id_string variable in the
-        # get_log_file_path function.
+        # get_job_id_string function.
         job_id_string = "%j" if job_count is None else "%A_%a"
         log_path = self.format_log_file_path(self.cfut_dir, job_id_string)
 

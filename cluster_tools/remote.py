@@ -59,7 +59,7 @@ def worker(workerid, job_array_index, cfut_dir):
             with open(fun, "rb") as function_file:
                 fun = pickling.load(function_file, custom_main_path)
 
-        setup_logging(meta_data, executor.get_log_file_path(cfut_dir))
+        setup_logging(meta_data, executor, cfut_dir)
 
         logging.info(
             "Job computation started (jobid={}, workerid_with_idx={}).".format(
@@ -92,9 +92,13 @@ def worker(workerid, job_array_index, cfut_dir):
     logging.debug("Pickle file renamed to {}.".format(destfile))
 
 
-def setup_logging(meta_data, log_file_path):
+def setup_logging(meta_data, executor, cfut_dir):
     if "logging_setup_fn" in meta_data:
-
+        job_id_string = executor.get_job_id_string()
+        # Leave the log file suffix so the caller can add their own suffix
+        log_file_path = executor.format_log_file_path(
+            cfut_dir, job_id_string, suffix=""
+        )
         meta_data["logging_setup_fn"](log_file_path)
         logging.debug("Using supplied logging_setup_fn to setup logging.")
     else:

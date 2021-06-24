@@ -127,16 +127,16 @@ class ClusterExecutor(futures.Executor):
 
     @staticmethod
     @abstractmethod
-    def format_log_file_name(jobid):
+    def format_log_file_name(jobid, suffix=".stdout"):
         pass
 
     @classmethod
-    def format_log_file_path(cls, cfut_dir, jobid):
-        return os.path.join(cfut_dir, cls.format_log_file_name(jobid))
+    def format_log_file_path(cls, cfut_dir, jobid, suffix=".stdout"):
+        return os.path.join(cfut_dir, cls.format_log_file_name(jobid, suffix))
 
     @classmethod
     @abstractmethod
-    def get_log_file_path(self, cfut_dir):
+    def get_job_id_string(self):
         pass
 
     def get_temp_file_path(self, file_name):
