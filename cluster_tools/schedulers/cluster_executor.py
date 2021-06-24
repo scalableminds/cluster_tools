@@ -188,7 +188,7 @@ class ClusterExecutor(futures.Executor):
             # successfully. # Therefore, the result can be used as a checkpoint
             # by users of the clustertools.
             os.rename(preliminary_outfile_name, outfile_name)
-            logging.info("Pickle file renamed to {}.".format(outfile_name))
+            logging.debug("Pickle file renamed to {}.".format(outfile_name))
 
             fut.set_result(result)
         else:

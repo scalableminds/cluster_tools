@@ -74,7 +74,7 @@ def worker(workerid, job_array_index, cfut_dir):
         print(traceback.format_exc())
 
         result = False, format_remote_exc()
-        logging.info("Job computation failed.")
+        logging.warning("Job computation failed.")
         out = pickling.dumps(result)
 
     # The .preliminary postfix is added since the output can
@@ -87,16 +87,16 @@ def worker(workerid, job_array_index, cfut_dir):
     tempfile = str(destfile) + ".tmp"
     with open(tempfile, "wb") as f:
         f.write(out)
-    logging.info("Pickle file written to {}.".format(tempfile))
+    logging.debug("Pickle file written to {}.".format(tempfile))
     os.rename(tempfile, destfile)
-    logging.info("Pickle file renamed to {}.".format(destfile))
+    logging.debug("Pickle file renamed to {}.".format(destfile))
 
 
 def setup_logging(meta_data, log_file_path):
     if "logging_setup_fn" in meta_data:
 
         meta_data["logging_setup_fn"](log_file_path)
-        logging.info("Using supplied logging_setup_fn to setup logging.")
+        logging.debug("Using supplied logging_setup_fn to setup logging.")
     else:
         logging_config = meta_data.get(
             "logging_config",
@@ -112,13 +112,11 @@ def setup_logging(meta_data, log_file_path):
         if "level" in logging_config:
             logger.setLevel(logging_config["level"])
 
-        logging.info(
+        logging.debug(
             "Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(
                 logging_config
             )
         )
-
-    logging.info("Starting job computation...")
 
 
 if __name__ == "__main__":
