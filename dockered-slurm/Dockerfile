@@ -47,9 +47,9 @@ RUN set -ex \
     && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
     && export GNUPGHOME="$(mktemp -d)" \
     # See https://github.com/tianon/gosu/issues/17#issuecomment-348464529
-    && ( gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEYS" \
-      || gpg --keyserver pgp.mit.edu --recv-keys "$GPG_KEYS" \
-      || gpg --keyserver keyserver.pgp.com --recv-keys "$GPG_KEYS" \
+    && ( gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+      || gpg --keyserver pgp.mit.edu --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+      || gpg --keyserver keyserver.pgp.com --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
     ) \
     && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
     && rm -rf "${GNUPGHOME}" /usr/local/bin/gosu.asc \
