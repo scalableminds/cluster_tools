@@ -40,7 +40,7 @@ RUN set -ex \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-RUN pip install --upgrade pip
+RUN python3 -m pip install --upgrade pip
 
 RUN pip3 install Cython nose
 RUN python3 -m pip install -U pytest
