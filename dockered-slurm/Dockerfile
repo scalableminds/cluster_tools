@@ -1,5 +1,8 @@
 FROM centos:7
 
+ENV LC_ALL=en_US.utf8
+ENV LANG=en_US.utf8
+
 LABEL org.opencontainers.image.source="https://github.com/giovtorres/slurm-docker-cluster" \
       org.opencontainers.image.title="slurm-docker-cluster" \
       org.opencontainers.image.description="Slurm Docker cluster on CentOS 7" \
@@ -50,6 +53,7 @@ RUN set -ex \
     && ( gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
       || gpg --keyserver pgp.mit.edu --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
       || gpg --keyserver keyserver.pgp.com --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+      || gpg --keyserver keyserver.ubuntu.com --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
     ) \
     && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
     && rm -rf "${GNUPGHOME}" /usr/local/bin/gosu.asc \
@@ -95,7 +99,7 @@ COPY slurmdbd.conf /etc/slurm/slurmdbd.conf
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN python3 -m pip install pylint
+RUN python3 -m pip install pylint black==19.3b0
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
