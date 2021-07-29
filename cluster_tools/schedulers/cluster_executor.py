@@ -42,15 +42,6 @@ class ClusterExecutor(futures.Executor):
         additional_setup_lines=[],
         **kwargs,
     ):
-        """
-        `kwargs` can be the following optional parameters:
-            `logging_config`: An object containing a `level` key specifying the desired log level and/or a
-                `format` key specifying the desired log format string. Cannot be specified together
-                with `logging_setup_fn`.
-            `logging_setup_fn`: A function setting up custom logging. The function will be called with the
-                default log file name. If the caller sets up file logging, this log file name should be adapted,
-                for example, by adding a .mylog suffix. Cannot be specified together with `logging_config`.
-        """
         self.debug = debug
         self.job_resources = job_resources
         self.additional_setup_lines = additional_setup_lines
@@ -84,12 +75,14 @@ class ClusterExecutor(futures.Executor):
 
         self.meta_data = {}
         assert not (
-            "logging_config" in kwargs and "logging_setup_fn" in kwargs
-        ), "Specify either logging_config OR logging_setup_fn but not both at once"
+            "logging_config" in kwargs and "logging_remote_setup_fn" in kwargs
+        ), "Specify either logging_config OR logging_remote_setup_fn but not both at once"
         if "logging_config" in kwargs:
             self.meta_data["logging_config"] = kwargs["logging_config"]
-        if "logging_setup_fn" in kwargs:
-            self.meta_data["logging_setup_fn"] = kwargs["logging_setup_fn"]
+        if "logging_remote_setup_fn" in kwargs:
+            self.meta_data["logging_remote_setup_fn"] = kwargs[
+                "logging_remote_setup_fn"
+            ]
 
     def handle_kill(self, signum, frame):
         self.wait_thread.stop()

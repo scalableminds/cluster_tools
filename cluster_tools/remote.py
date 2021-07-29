@@ -92,15 +92,20 @@ def worker(workerid, job_array_index, cfut_dir):
     logging.debug("Pickle file renamed to {}.".format(destfile))
 
 
-def setup_logging(meta_data, executor, cfut_dir):
-    if "logging_setup_fn" in meta_data:
+def setup_logging(meta_data, executor=None, cfut_dir=None):
+    if "logging_remote_setup_fn" in meta_data:
         job_id_string = executor.get_job_id_string()
         # Leave the log file suffix so the caller can add their own suffix
         log_file_path = executor.format_log_file_path(
             cfut_dir, job_id_string, suffix=""
         )
-        meta_data["logging_setup_fn"](log_file_path)
-        logging.debug("Using supplied logging_setup_fn to setup logging.")
+        meta_data["logging_remote_setup_fn"](log_file_path)
+        logging.debug("Using supplied logging_remote_setup_fn to setup logging.")
+    elif "logging_multiprocessing_setup_fn" in meta_data:
+        meta_data["logging_multiprocessing_setup_fn"]()
+        logging.debug(
+            "Using supplied logging_multiprocessing_setup_fn to setup logging."
+        )
     else:
         logging_config = meta_data.get(
             "logging_config",

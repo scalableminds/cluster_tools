@@ -1,13 +1,11 @@
 from concurrent import futures
 from concurrent.futures import ProcessPoolExecutor
 import os
-import sys
-import threading
+from .remote import setup_logging
 from .schedulers.slurm import SlurmExecutor
 from .schedulers.pbs import PBSExecutor
-from .util import random_string, call, enrich_future_with_uncaught_warning
+from .util import enrich_future_with_uncaught_warning
 from . import pickling
-import importlib
 import multiprocessing
 import logging
 import shutil
@@ -33,6 +31,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
         new_kwargs = get_existent_kwargs_subset(PROCESS_POOL_KWARGS_WHITELIST, kwargs)
 
         self.did_overwrite_start_method = False
+        self.meta_data = {}
         if kwargs.get("start_method", None) is not None:
             self.did_overwrite_start_method = True
             self.old_start_method = multiprocessing.get_start_method()
@@ -41,6 +40,16 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
                 f"Overwriting start_method to {start_method}. Previous value: {self.old_start_method}"
             )
             multiprocessing.set_start_method(start_method, force=True)
+
+        assert not (
+            "logging_config" in kwargs and "logging_multiprocessing_setup_fn" in kwargs
+        ), "Specify either logging_config OR logging_multiprocessing_setup_fn but not both at once"
+        if "logging_config" in kwargs:
+            self.meta_data["logging_config"] = kwargs["logging_config"]
+        if "logging_multiprocessing_setup_fn" in kwargs:
+            self.meta_data["logging_multiprocessing_setup_fn"] = kwargs[
+                "logging_multiprocessing_setup_fn"
+            ]
 
         ProcessPoolExecutor.__init__(self, **new_kwargs)
 
@@ -72,15 +81,22 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
         else:
             submit_fn = super().submit
 
-        if output_pickle_path is not None:
-            fut = submit_fn(
-                WrappedProcessPoolExecutor._execute_and_persist_function,
-                output_pickle_path,
-                *args,
-                **kwargs,
+        call_stack = []
+
+        if multiprocessing.get_start_method() != "fork":
+            call_stack.extend(
+                [WrappedProcessPoolExecutor._setup_logging_and_execute, self.meta_data]
             )
-        else:
-            fut = submit_fn(*args, **kwargs)
+
+        if output_pickle_path is not None:
+            call_stack.extend(
+                [
+                    WrappedProcessPoolExecutor._execute_and_persist_function,
+                    output_pickle_path,
+                ]
+            )
+
+        fut = submit_fn(*call_stack, *args, **kwargs)
 
         enrich_future_with_uncaught_warning(fut)
         return fut
@@ -115,6 +131,16 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
     def _remove_tmp_file(path, _future):
 
         shutil.rmtree(path)
+
+    @staticmethod
+    def _setup_logging_and_execute(meta_data, *args, **kwargs):
+
+        func = args[0]
+        args = args[1:]
+
+        setup_logging(meta_data)
+
+        return func(*args, **kwargs)
 
     @staticmethod
     def _execute_via_io(serialized_function_info_path):
@@ -201,6 +227,20 @@ class PickleExecutor(WrappedProcessPoolExecutor):
 
 
 def get_executor(environment, **kwargs):
+    """
+    `kwargs` can be the following optional parameters:
+        `logging_config`: An object containing a `level` key specifying the desired log level and/or a
+            `format` key specifying the desired log format string. Cannot be specified together
+            with `logging_remote_setup_fn`.
+        `logging_remote_setup_fn`: A function setting up custom logging. The function will be called for
+            remotely executed code (slurm, pbs) to re-setup logging. The function will be called with the
+            default log file name. If the caller sets up file logging, this log file name should be adapted,
+            for example, by adding a .mylog suffix. Cannot be specified together with `logging_config`.
+        `logging_multiprocessing_setup_fn`: A function setting up custom logging. The function will be called for
+            locally executed code (multiprocessing, sequential, test_pickling) to re-setup logging if a start_method
+            other than the default "fork" is used, because the programming context is not inherited in those cases.
+            Cannot be specified together with `logging_config`.
+    """
     if environment == "slurm":
         return SlurmExecutor(**kwargs)
     elif environment == "pbs":
