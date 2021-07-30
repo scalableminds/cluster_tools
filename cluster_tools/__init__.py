@@ -184,6 +184,42 @@ class SequentialExecutor(WrappedProcessPoolExecutor):
         WrappedProcessPoolExecutor.__init__(self, **kwargs)
 
 
+class DebugSequentialExecutor(SequentialExecutor):
+    
+    def submit(self, *args, **kwargs):
+
+        print("DebugSequentialExecutor::submit")    
+
+        output_pickle_path = None
+        if "__cfut_options" in kwargs:
+            output_pickle_path = kwargs["__cfut_options"]["output_pickle_path"]
+            del kwargs["__cfut_options"]
+
+        if output_pickle_path is not None:
+            fut = self._blocking_submit(
+                WrappedProcessPoolExecutor._execute_and_persist_function,
+                output_pickle_path,
+                *args,
+                **kwargs,
+            )
+        else:
+            fut = self._blocking_submit(*args, **kwargs)
+
+        enrich_future_with_uncaught_warning(fut)
+        return fut
+
+    def _blocking_submit(self, *args, **kwargs):
+
+        func = args[0]
+        args = args[1:]
+
+        fut = futures.Future()
+        result = func(*args, **kwargs)
+        fut.set_result(result)
+
+        return fut
+
+
 def pickle_identity(obj):
     return pickling.loads(pickling.dumps(obj))
 
@@ -209,6 +245,8 @@ def get_executor(environment, **kwargs):
         return WrappedProcessPoolExecutor(**kwargs)
     elif environment == "sequential":
         return SequentialExecutor(**kwargs)
+    elif environment == "debug_sequential":
+        return DebugSequentialExecutor(**kwargs)
     elif environment == "test_pickling":
         return PickleExecutor(**kwargs)
     raise Exception("Unknown executor: {}".format(environment))
