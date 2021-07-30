@@ -38,7 +38,7 @@ def get_executors(with_debug_sequential=False):
         cluster_tools.get_executor("sequential"),
         cluster_tools.get_executor("test_pickling"),
         # cluster_tools.get_executor("pbs"),
-    ]   
+    ]
 
     if with_debug_sequential:
         executors.append(cluster_tools.get_executor("debug_sequential"))
@@ -129,13 +129,14 @@ def test_submit():
     for exc in get_executors(with_debug_sequential=True):
         run_square_numbers(exc)
 
+
 def get_pid():
 
     return os.getpid()
 
 
 def test_process_id():
-        
+
     outer_pid = os.getpid()
 
     def compare_pids(executor):
@@ -146,12 +147,17 @@ def test_process_id():
             should_differ = not isinstance(exc, cluster_tools.DebugSequentialExecutor)
 
             if should_differ:
-                assert inner_pid != outer_pid, f"Inner and outer pid should differ, but both are {inner_pid}."
+                assert (
+                    inner_pid != outer_pid
+                ), f"Inner and outer pid should differ, but both are {inner_pid}."
             else:
-                assert inner_pid == outer_pid, f"Inner and outer pid should be equal, but {inner_pid} != {outer_pid}."
+                assert (
+                    inner_pid == outer_pid
+                ), f"Inner and outer pid should be equal, but {inner_pid} != {outer_pid}."
 
     for exc in get_executors(with_debug_sequential=True):
         compare_pids(exc)
+
 
 def test_unordered_sleep():
     """Get host identifying information about the servers running
@@ -205,9 +211,11 @@ def test_map_to_futures_with_debug_sequential():
     with cluster_tools.get_executor("debug_sequential") as exc:
         durations = [4, 1]
         futures = exc.map_to_futures(sleep, durations)
-        
+
         for fut in futures:
-            assert fut.done(), "Future should immediately be finished after map_to_futures has returned"
+            assert (
+                fut.done()
+            ), "Future should immediately be finished after map_to_futures has returned"
 
         results = []
         for i, duration in enumerate(concurrent.futures.as_completed(futures)):
