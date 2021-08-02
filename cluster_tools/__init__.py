@@ -187,8 +187,6 @@ class SequentialExecutor(WrappedProcessPoolExecutor):
 class DebugSequentialExecutor(SequentialExecutor):
     def submit(self, *args, **kwargs):
 
-        print("DebugSequentialExecutor::submit")
-
         output_pickle_path = None
         if "__cfut_options" in kwargs:
             output_pickle_path = kwargs["__cfut_options"]["output_pickle_path"]
