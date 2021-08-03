@@ -199,7 +199,7 @@ class SequentialExecutor(WrappedProcessPoolExecutor):
 
 class DebugSequentialExecutor(SequentialExecutor):
     """
-    Only use for debuggign purposes. This executor does not spawn new processes for its jobs. Therefore,
+    Only use for debugging purposes. This executor does not spawn new processes for its jobs. Therefore,
     setting breakpoint()'s should be possible without context-related problems.
     """
 
