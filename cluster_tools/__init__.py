@@ -35,6 +35,7 @@ class WrappedProcessPoolExecutor(ProcessPoolExecutor):
     - pickling of job's output (see output_pickle_path_getter and output_pickle_path)
     - job submission via pickling to circumvent bug in python < 3.8 (see MULTIPROCESSING_VIA_IO_TMP_DIR)
     """
+
     def __init__(self, **kwargs):
         new_kwargs = get_existent_kwargs_subset(PROCESS_POOL_KWARGS_WHITELIST, kwargs)
 
@@ -190,6 +191,7 @@ class SequentialExecutor(WrappedProcessPoolExecutor):
     this is a sequential executor approach, but it still makes use of the standard pool approach.
     That way, switching between different executors should always work without any problems.
     """
+
     def __init__(self, **kwargs):
         kwargs["max_workers"] = 1
         WrappedProcessPoolExecutor.__init__(self, **kwargs)
@@ -200,6 +202,7 @@ class DebugSequentialExecutor(SequentialExecutor):
     Only use for debuggign purposes. This executor does not spawn new processes for its jobs. Therefore,
     setting breakpoint()'s should be possible without context-related problems.
     """
+
     def submit(self, *args, **kwargs):
 
         output_pickle_path = None
@@ -247,6 +250,7 @@ class PickleExecutor(WrappedProcessPoolExecutor):
     When using this executor for automated tests, it is ensured that using cluster executors in production
     won't provoke pickling-related problems.
     """
+
     def submit(self, _func, *_args, **_kwargs):
 
         (func, args, kwargs) = pickle_identity((_func, _args, _kwargs))
