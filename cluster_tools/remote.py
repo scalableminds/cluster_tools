@@ -92,24 +92,25 @@ def worker(workerid, job_array_index, cfut_dir):
     logging.debug("Pickle file renamed to {}.".format(destfile))
 
 
-def setup_logging(meta_data, executor=None, cfut_dir=None):
-    if "logging_remote_setup_fn" in meta_data:
+def setup_logging(meta_data, executor, cfut_dir):
+    if "logging_setup_fn" in meta_data:
+        logging.debug("Using supplied logging_setup_fn to setup logging.")
         job_id_string = executor.get_job_id_string()
         # Leave the log file suffix so the caller can add their own suffix
         log_file_path = executor.format_log_file_path(
             cfut_dir, job_id_string, suffix=""
         )
-        meta_data["logging_remote_setup_fn"](log_file_path)
-        logging.debug("Using supplied logging_remote_setup_fn to setup logging.")
-    elif "logging_multiprocessing_setup_fn" in meta_data:
-        meta_data["logging_multiprocessing_setup_fn"]()
-        logging.debug(
-            "Using supplied logging_multiprocessing_setup_fn to setup logging."
-        )
+        meta_data["logging_setup_fn"](log_file_path)
     else:
         logging_config = meta_data.get(
             "logging_config",
             {"level": logging.DEBUG, "format": "%(asctime)s %(levelname)s %(message)s"},
+        )
+
+        logging.debug(
+            "Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(
+                logging_config
+            )
         )
 
         # Call basicConfig which is necessary for the logging to work.
@@ -120,12 +121,6 @@ def setup_logging(meta_data, executor=None, cfut_dir=None):
         logger = logging.getLogger()
         if "level" in logging_config:
             logger.setLevel(logging_config["level"])
-
-        logging.debug(
-            "Setting up logging.basicConfig (potentially overwriting logging configuration of the main script). Config: {}".format(
-                logging_config
-            )
-        )
 
 
 if __name__ == "__main__":
