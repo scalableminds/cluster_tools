@@ -20,6 +20,12 @@ from cluster_tools.tailf import Tail
 import shutil
 
 
+#https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks
+from itertools import zip_longest
+def grouper(n, iterable, padvalue=None):
+    "grouper(3, 'abcdefg', 'x') --> ('a','b','c'), ('d','e','f'), ('g','x','x')"
+    return zip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
+
 class RemoteException(Exception):
     def __init__(self, error, job_id):
         self.error = error
@@ -53,7 +59,6 @@ class ClusterExecutor(futures.Executor):
                 for example, by adding a .mylog suffix. Cannot be specified together with `logging_config`.
         """
         self.debug = debug
-        self.job_resources = job_resources
         self.additional_setup_lines = additional_setup_lines
         self.job_name = job_name
         self.was_requested_to_shutdown = False
@@ -65,6 +70,20 @@ class ClusterExecutor(futures.Executor):
         logging.info(
             f"Instantiating ClusterExecutor. Log files are stored in {self.cfut_dir}"
         )
+
+        # handle maximum job size limit (e.g. MaxArraySize in slurm).
+        if 'maxjobsize' in job_resources:
+            self.maxjobsize = int(job_resources['maxjobsize'])
+            del job_resources['maxjobsize']
+        else:
+            self.maxjobsize = None
+        # handle maximum submitted jobs limit (e.g. MaxSubmitJobs in slurm).
+        if 'maxsubmit' in job_resources:
+            self.maxsubmit = int(job_resources['maxsubmit'])
+            del job_resources['maxsubmit']
+        else:
+            self.maxsubmit = None
+        self.job_resources = job_resources
 
         # `jobs` maps from job id to (future, workerid, outfile_name, should_keep_output)
         # In case, job arrays are used: job id and workerid are in the format of
@@ -306,58 +325,83 @@ class ClusterExecutor(futures.Executor):
         should_keep_output = output_pickle_path_getter is not None
 
         futs_with_output_paths = []
-        workerid = random_string()
 
-        pickled_function_path = self.get_function_pickle_path(workerid)
-        self.files_to_clean_up.append(pickled_function_path)
-        with open(pickled_function_path, "wb") as file:
-            pickling.dump(fun, file)
-        self.store_main_path_to_meta_file(workerid)
+        # Group jobs into groups of maxjobsize
+        if self.maxjobsize is not None:
+            groups_allArgs = list(grouper(self.maxjobsize, allArgs))
+            groups_allArgs = [[x for x in y if x is not None] for y in groups_allArgs]
+        else:
+            groups_allArgs = [allArgs]
 
-        # Submit jobs eagerly
-        for index, arg in enumerate(allArgs):
-            fut = self.create_enriched_future()
-            workerid_with_index = self.get_workerid_with_index(workerid, index)
+        # Submit completely separate jobs for each group in order to comply with maxjobsize
+        for job_index, group_allArgs in enumerate(groups_allArgs):
+            workerid = random_string()
 
-            if output_pickle_path_getter is None:
-                output_pickle_path = self.format_outfile_name(
-                    self.cfut_dir, workerid_with_index
+            pickled_function_path = self.get_function_pickle_path(workerid)
+            self.files_to_clean_up.append(pickled_function_path)
+            with open(pickled_function_path, "wb") as file:
+                pickling.dump(fun, file)
+            self.store_main_path_to_meta_file(workerid)
+
+            # Submit jobs eagerly
+            cfuts_with_output_paths = []
+            for index, arg in enumerate(group_allArgs):
+                fut = self.create_enriched_future()
+                workerid_with_index = self.get_workerid_with_index(workerid, index)
+
+                if output_pickle_path_getter is None:
+                    output_pickle_path = self.format_outfile_name(
+                        self.cfut_dir, workerid_with_index
+                    )
+                else:
+                    output_pickle_path = output_pickle_path_getter(arg)
+
+                preliminary_output_pickle_path = with_preliminary_postfix(
+                    output_pickle_path
                 )
-            else:
-                output_pickle_path = output_pickle_path_getter(arg)
+                if os.path.exists(preliminary_output_pickle_path):
+                    logging.warning(
+                        f"Deleting stale output file at {preliminary_output_pickle_path}..."
+                    )
+                    os.unlink(preliminary_output_pickle_path)
 
-            preliminary_output_pickle_path = with_preliminary_postfix(
-                output_pickle_path
-            )
-            if os.path.exists(preliminary_output_pickle_path):
-                logging.warning(
-                    f"Deleting stale output file at {preliminary_output_pickle_path}..."
+                # Start the job.
+                serialized_function_info = pickling.dumps(
+                    (pickled_function_path, [arg], {}, self.meta_data, output_pickle_path)
                 )
-                os.unlink(preliminary_output_pickle_path)
+                infile_name = self.format_infile_name(self.cfut_dir, workerid_with_index)
 
-            # Start the job.
-            serialized_function_info = pickling.dumps(
-                (pickled_function_path, [arg], {}, self.meta_data, output_pickle_path)
-            )
-            infile_name = self.format_infile_name(self.cfut_dir, workerid_with_index)
+                with open(infile_name, "wb") as f:
+                    f.write(serialized_function_info)
 
-            with open(infile_name, "wb") as f:
-                f.write(serialized_function_info)
+                futs_with_output_paths.append((fut, output_pickle_path))
+                cfuts_with_output_paths.append((fut, output_pickle_path))
+            #for index, arg in enumerate(group_allArgs):
 
-            futs_with_output_paths.append((fut, output_pickle_path))
+            job_count = len(group_allArgs)
+            job_name = get_function_name(fun)
 
-        job_count = len(allArgs)
-        job_name = get_function_name(fun)
-        jobid = self._start(workerid, job_count, job_name)
+            if self.maxsubmit is not None:
+                # wait for enough jobs to complete so that maxsubmit limit will not be exceeded.
+                cfuts = [fut for (fut, _) in futs_with_output_paths]
+                nsubmitted = len(cfuts)
+                if nsubmitted > self.maxsubmit:
+                    print('Waiting to submit {} jobs, maxsubmit={}'.format(job_count, self.maxsubmit),
+                        file=sys.stderr)
+                    for fut in futures.as_completed(cfuts):
+                        nsubmitted -= 1
+                        if nsubmitted <= self.maxsubmit: break
 
-        if self.debug:
-            print(
-                "main job submitted: %i. consists of %i subjobs." % (jobid, job_count),
-                file=sys.stderr,
-            )
+            jobid = self._start(workerid, job_count, job_name)
 
-        with self.jobs_lock:
-            for index, (fut, output_pickle_path) in enumerate(futs_with_output_paths):
+            if self.debug:
+                print(
+                    "job %i/%i submitted: %i. consists of %i subjobs." % (job_index+1, len(groups_allArgs), jobid,
+                        job_count),
+                    file=sys.stderr,
+                )
+
+            for index, (fut, output_pickle_path) in enumerate(cfuts_with_output_paths):
                 jobid_with_index = self.get_jobid_with_index(jobid, index)
                 # Thread will wait for it to finish.
 
@@ -369,12 +413,19 @@ class ClusterExecutor(futures.Executor):
                 fut.cluster_jobid = jobid
                 fut.cluster_jobindex = index
 
-                self.jobs[jobid_with_index] = (
-                    fut,
-                    workerid_with_index,
-                    outfile_name,
-                    should_keep_output,
-                )
+                # do not put lock around the whole for loop because this results in a race condition where both
+                #   this thread and FileWaitThread attempt to grab both locks at the same time.
+                # in this thread both locks would be attempted in waitFor.
+                # in FileWaitThread both locks would be attempted in _complete.
+                # these threads can now be running simultaneously when self.maxsubmit is specified.
+                with self.jobs_lock:
+                    self.jobs[jobid_with_index] = (
+                        fut,
+                        workerid_with_index,
+                        outfile_name,
+                        should_keep_output,
+                    )
+        #for job_index, group_allArgs in enumerate(groups_allArgs):
 
         return [fut for (fut, _) in futs_with_output_paths]
 
