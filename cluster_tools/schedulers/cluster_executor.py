@@ -17,7 +17,6 @@ from abc import abstractmethod
 import logging
 from typing import Union
 from cluster_tools.tailf import Tail
-import shutil
 
 
 class RemoteException(Exception):
@@ -112,14 +111,14 @@ class ClusterExecutor(futures.Executor):
         cfut.remote <workerid>.
         """
 
-        jobid = self.inner_submit(
+        jobids, ranges = self.inner_submit(
             f"{sys.executable} -m cluster_tools.remote {workerid} {self.cfut_dir}",
             job_name=self.job_name if self.job_name is not None else job_name,
             additional_setup_lines=self.additional_setup_lines,
             job_count=job_count,
         )
 
-        return jobid
+        return jobids, ranges
 
     @abstractmethod
     def inner_submit(self, *args, **kwargs):
@@ -264,7 +263,9 @@ class ClusterExecutor(futures.Executor):
             os.unlink(preliminary_output_pickle_path)
 
         job_name = get_function_name(fun)
-        jobid = self._start(workerid, job_name=job_name)
+        jobids, _ = self._start(workerid, job_name=job_name)
+        # Only a single job was submitted
+        jobid = jobids[0]
 
         if self.debug:
             print("job submitted: %i" % jobid, file=sys.stderr)
@@ -348,33 +349,45 @@ class ClusterExecutor(futures.Executor):
 
         job_count = len(allArgs)
         job_name = get_function_name(fun)
-        jobid = self._start(workerid, job_count, job_name)
+        jobids, ranges = self._start(workerid, job_count, job_name)
 
         if self.debug:
             print(
-                "main job submitted: %i. consists of %i subjobs." % (jobid, job_count),
+                "main job(s) submitted: {} totaling {} subjobs.".format(
+                    jobids, job_count
+                ),
                 file=sys.stderr,
             )
 
         with self.jobs_lock:
-            for index, (fut, output_pickle_path) in enumerate(futs_with_output_paths):
-                jobid_with_index = self.get_jobid_with_index(jobid, index)
-                # Thread will wait for it to finish.
+            for jobid, (fut_index_start, fut_index_end) in zip(jobids, ranges):
+                for fut_index in range(fut_index_start, fut_index_end):
+                    fut, output_path = futs_with_output_paths[fut_index]
+                    job_index = fut_index - fut_index_start
+                    number_of_jobs = fut_index_end - fut_index_start
 
-                outfile_name = output_pickle_path
-                self.wait_thread.waitFor(
-                    with_preliminary_postfix(outfile_name), jobid_with_index
-                )
+                    job_key = (
+                        self.get_jobid_with_index(jobid, job_index)
+                        if number_of_jobs > 1
+                        else jobid
+                    )
 
-                fut.cluster_jobid = jobid
-                fut.cluster_jobindex = index
+                    outfile_name = output_path
 
-                self.jobs[jobid_with_index] = (
-                    fut,
-                    workerid_with_index,
-                    outfile_name,
-                    should_keep_output,
-                )
+                    # Thread will wait for it to finish.
+                    self.wait_thread.waitFor(
+                        with_preliminary_postfix(outfile_name), job_key
+                    )
+
+                    fut.cluster_jobid = jobid
+                    fut.cluster_jobindex = job_index
+
+                    self.jobs[job_key] = (
+                        fut,
+                        workerid_with_index,
+                        outfile_name,
+                        should_keep_output,
+                    )
 
         return [fut for (fut, _) in futs_with_output_paths]
 

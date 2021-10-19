@@ -2,8 +2,6 @@
 """
 import re
 import os
-import threading
-import time
 from cluster_tools.util import chcall, random_string, call
 from .cluster_executor import ClusterExecutor
 import logging
@@ -67,6 +65,40 @@ class SlurmExecutor(ClusterExecutor):
         )
         return job_id_string
 
+    @staticmethod
+    def get_max_array_size():
+        # See https://unix.stackexchange.com/a/364615
+        stdout, stderr, exit_code = call(
+            "scontrol show config | sed -n '/^MaxArraySize/s/.*= *//p'"
+        )
+        max_array_size = 2 ** 32
+        if exit_code == 0:
+            max_array_size = int(stdout.decode("utf8"))
+            # TODO: Debug
+            logging.info(f"Slurm MaxArraySize is {max_array_size}.")
+        else:
+            logging.warn(
+                f"Slurm's MaxArraySize couldn't be determined. Reason: {stderr}"
+            )
+        return max_array_size
+
+    @staticmethod
+    def get_number_of_submitted_jobs():
+        # --array so that each job array element is displayed on a separate line and -h to hide the header
+        stdout, stderr, exit_code = call("squeue --array -u $USER -h | wc -l")
+        number_of_submitted_jobs = 0
+        if exit_code == 0:
+            number_of_submitted_jobs = int(stdout.decode("utf8"))
+            # TODO: Debug
+            logging.info(
+                f"Number of currently submitted jobs is {number_of_submitted_jobs}."
+            )
+        else:
+            logging.warn(
+                f"Number of currently submitted jobs couldn't be determined. Reason: {stderr}"
+            )
+        return number_of_submitted_jobs
+
     def submit_text(self, job):
         """Submits a Slurm job represented as a job file string. Returns
         the job ID.
@@ -86,8 +118,7 @@ class SlurmExecutor(ClusterExecutor):
     def inner_submit(
         self, cmdline, job_name=None, additional_setup_lines=[], job_count=None
     ):
-        """Starts a Slurm job that runs the specified shell command line.
-        """
+        """Starts a Slurm job that runs the specified shell command line."""
 
         # These place holders will be replaced by sbatch, see https://slurm.schedmd.com/sbatch.html#SECTION_%3CB%3Efilename-pattern%3C/B%3E
         # This variable needs to be kept in sync with the job_id_string variable in the
@@ -100,22 +131,38 @@ class SlurmExecutor(ClusterExecutor):
             for resource, value in self.job_resources.items():
                 job_resources_lines += ["#SBATCH --{}={}".format(resource, value)]
 
-        job_array_line = ""
-        if job_count is not None:
-            job_array_line = "#SBATCH --array=0-{}".format(job_count - 1)
+        max_array_size = self.get_max_array_size()
 
-        script_lines = (
-            [
-                "#!/bin/sh",
-                "#SBATCH --output={}".format(log_path),
-                '#SBATCH --job-name "{}"'.format(job_name),
-                job_array_line,
-            ]
-            + job_resources_lines
-            + [*additional_setup_lines, "srun {}".format(cmdline)]
-        )
+        job_ids = []
+        ranges = []
+        number_of_jobs = job_count if job_count is not None else 1
+        for job_index_start in range(0, number_of_jobs, max_array_size):
+            # job_index_end is inclusive
+            job_index_end = min(job_index_start + max_array_size, number_of_jobs) - 1
+            array_index_end = job_index_end - job_index_start
 
-        return self.submit_text("\n".join(script_lines))
+            job_array_line = ""
+            if job_count is not None:
+                job_array_line = "#SBATCH --array=0-{}".format(array_index_end)
+
+            script_lines = (
+                [
+                    "#!/bin/sh",
+                    "#SBATCH --output={}".format(log_path),
+                    '#SBATCH --job-name "{}"'.format(job_name),
+                    job_array_line,
+                ]
+                + job_resources_lines
+                + [
+                    *additional_setup_lines,
+                    "srun {} {}".format(cmdline, job_index_start),
+                ]
+            )
+
+            job_ids.append(self.submit_text("\n".join(script_lines)))
+            ranges.append((job_index_start, job_index_end + 1))
+
+        return job_ids, ranges
 
     def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
 
