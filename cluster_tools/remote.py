@@ -73,7 +73,7 @@ def worker(workerid, job_array_index, job_array_index_offset, cfut_dir):
         logging.info("Job computation completed.")
         out = pickling.dumps(result)
 
-    except Exception as e:
+    except Exception:
         print(traceback.format_exc())
 
         result = False, format_remote_exc()

@@ -96,14 +96,14 @@ class SlurmExecutor(ClusterExecutor):
         )
         try:
             max_submit_jobs = int(stdout_user.decode("utf8"))
-        except:
+        except ValueError:
             # If there is no limit per user check whether there is a general limit
             stdout_qos, stderr_qos, _ = call(
                 "sacctmgr list -n qos normal format=maxsubmitjobsperuser"
             )
             try:
                 max_submit_jobs = int(stdout_qos.decode("utf8"))
-            except:
+            except ValueError:
                 logging.warning(
                     f"Slurm's MaxSubmitJobsPerUser couldn't be determined. Reason: {stderr_user}\n{stderr_qos}"
                 )
@@ -144,9 +144,11 @@ class SlurmExecutor(ClusterExecutor):
         return int(job_id)
 
     def inner_submit(
-        self, cmdline, job_name=None, additional_setup_lines=[], job_count=None
+        self, cmdline, job_name=None, additional_setup_lines=None, job_count=None
     ):
         """Starts a Slurm job that runs the specified shell command line."""
+        if additional_setup_lines is None:
+            additional_setup_lines = []
 
         # These place holders will be replaced by sbatch, see https://slurm.schedmd.com/sbatch.html#SECTION_%3CB%3Efilename-pattern%3C/B%3E
         # This variable needs to be kept in sync with the job_id_string variable in the
@@ -253,7 +255,7 @@ class SlurmExecutor(ClusterExecutor):
         elif matches_states(SLURM_STATES["Ignore"]):
             return "ignore"
         elif matches_states(SLURM_STATES["Unclear"]):
-            logging.warn(
+            logging.warning(
                 "The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(
                     job_id, job_states
                 )
@@ -276,7 +278,7 @@ class SlurmExecutor(ClusterExecutor):
 
             job_ids = set(stdout.split("\n"))
             return job_ids
-        except Exception as e:
+        except Exception:
             logging.error(
                 "Couldn't query pending jobs. Polling for finished jobs might be slow."
             )

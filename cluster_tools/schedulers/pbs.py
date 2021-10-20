@@ -64,9 +64,11 @@ class PBSExecutor(ClusterExecutor):
         return int(jobid)
 
     def inner_submit(
-        self, cmdline, job_name=None, additional_setup_lines=[], job_count=None
+        self, cmdline, job_name=None, additional_setup_lines=None, job_count=None
     ):
         """Starts a PBS job that runs the specified shell command line."""
+        if additional_setup_lines is None:
+            additional_setup_lines = []
 
         # if job_count is None else "$PBS_JOBID.$PBS_ARRAY_INDEX"
         # $PBS_JOBID will also include an array index if it's a job array
@@ -140,7 +142,7 @@ class PBSExecutor(ClusterExecutor):
                 elif job_state in PBS_STATES["Ignore"]:
                     return "ignore"
                 elif job_state in PBS_STATES["Unclear"]:
-                    logging.warn(
+                    logging.warning(
                         "The job state for {} is {}. It's unclear whether the job will recover. Will wait further".format(
                             job_id, job_state
                         )

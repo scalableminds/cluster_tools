@@ -17,10 +17,11 @@ from abc import abstractmethod
 import logging
 from typing import Union
 from cluster_tools.tailf import Tail
+from functools import partial
 
 
 class RemoteException(Exception):
-    def __init__(self, error, job_id):
+    def __init__(self, error, job_id):  # pylint: disable=super-init-not-called
         self.error = error
         self.job_id = job_id
 
@@ -38,7 +39,7 @@ class ClusterExecutor(futures.Executor):
         cfut_dir=None,
         job_resources=None,
         job_name=None,
-        additional_setup_lines=[],
+        additional_setup_lines=None,
         **kwargs,
     ):
         """
@@ -53,7 +54,7 @@ class ClusterExecutor(futures.Executor):
         """
         self.debug = debug
         self.job_resources = job_resources
-        self.additional_setup_lines = additional_setup_lines
+        self.additional_setup_lines = additional_setup_lines or []
         self.job_name = job_name
         self.was_requested_to_shutdown = False
         self.cfut_dir = (
@@ -91,7 +92,7 @@ class ClusterExecutor(futures.Executor):
         if "logging_setup_fn" in kwargs:
             self.meta_data["logging_setup_fn"] = kwargs["logging_setup_fn"]
 
-    def handle_kill(self, signum, frame):
+    def handle_kill(self, _signum, _frame):
         self.wait_thread.stop()
         job_ids = ",".join(str(id) for id in self.jobs.keys())
         print(
@@ -357,8 +358,8 @@ class ClusterExecutor(futures.Executor):
                 jobids_futures, ranges
             ):
                 jobid_future.add_done_callback(
-                    lambda fut: self.register_jobs(
-                        fut.result(),
+                    partial(
+                        self.register_jobs,
                         futs_with_output_paths[fut_index_start:fut_index_end],
                         workerid,
                         should_keep_output,
@@ -370,12 +371,13 @@ class ClusterExecutor(futures.Executor):
 
     def register_jobs(
         self,
-        jobid,
         futs_with_output_paths,
         workerid,
         should_keep_output,
-        job_index_offset=0,
+        job_index_offset,
+        jobid_future,
     ):
+        jobid = jobid_future.result()
         if self.debug:
             print(
                 "Submitted main job: {} totaling {} subjobs.".format(

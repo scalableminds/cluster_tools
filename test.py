@@ -393,14 +393,14 @@ def test_slurm_max_submit_user():
 
             with executor:
                 futures = executor.map_to_futures(square, range(10))
-                concurrent.futures.wait(futures)
+
+                result = [fut.result() for fut in futures]
+                assert result == [i ** 2 for i in range(10)]
+
                 job_ids = {fut.cluster_jobid for fut in futures}
                 # The 10 work packages should have been scheduled as 5 separate jobs,
                 # because the cluster_tools schedule at most 1/3 of MaxSubmitJobs at once.
                 assert len(job_ids) == 5
-
-                result = [fut.result() for fut in futures]
-                assert result == [i ** 2 for i in range(10)]
         finally:
             _, _, exit_code = call(
                 f"echo y | sacctmgr modify {command} set MaxSubmitJobs=-1"
@@ -633,8 +633,9 @@ def test_preliminary_file_map():
                 list(a_range),
                 output_pickle_path_getter=partial(output_pickle_path_getter, tmp_dir),
             )
-            with pytest.raises(Exception):
-                [fut.result() for fut in futs]
+            for fut in futs:
+                with pytest.raises(Exception):
+                    fut.result()
 
             for idx in a_range:
                 output_pickle_path = Path(output_pickle_path_getter(tmp_dir, idx))
