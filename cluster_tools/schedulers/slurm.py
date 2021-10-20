@@ -2,10 +2,13 @@
 """
 import re
 import os
+import sys
 from cluster_tools.util import chcall, random_string, call
 from .cluster_executor import ClusterExecutor
 import logging
+import asyncio
 from typing import Union
+from concurrent import futures
 
 SLURM_STATES = {
     "Failure": [
@@ -33,6 +36,8 @@ SLURM_STATES = {
     ],
     "Unclear": ["SUSPENDED", "REVOKED", "SIGNALING", "SPECIAL_EXIT", "STAGE_OUT"],
 }
+
+SLURM_QUEUE_CHECK_INTERVAL = 1 if "pytest" in sys.modules else 60
 
 
 class SlurmExecutor(ClusterExecutor):
@@ -67,34 +72,57 @@ class SlurmExecutor(ClusterExecutor):
 
     @staticmethod
     def get_max_array_size():
+        max_array_size = 2 ** 32
         # See https://unix.stackexchange.com/a/364615
         stdout, stderr, exit_code = call(
             "scontrol show config | sed -n '/^MaxArraySize/s/.*= *//p'"
         )
-        max_array_size = 2 ** 32
         if exit_code == 0:
             max_array_size = int(stdout.decode("utf8"))
             # TODO: Debug
-            logging.info(f"Slurm MaxArraySize is {max_array_size}.")
+            print(f"Slurm MaxArraySize is {max_array_size}.")
         else:
-            logging.warn(
+            logging.warning(
                 f"Slurm's MaxArraySize couldn't be determined. Reason: {stderr}"
             )
         return max_array_size
 
     @staticmethod
+    def get_max_submit_jobs():
+        max_submit_jobs = 2 ** 32
+        # Check whether there is a limit per user
+        stdout_user, stderr_user, _ = call(
+            "sacctmgr list -n user $USER withassoc format=maxsubmitjobsperuser"
+        )
+        try:
+            max_submit_jobs = int(stdout_user.decode("utf8"))
+        except:
+            # If there is no limit per user check whether there is a general limit
+            stdout_qos, stderr_qos, _ = call(
+                "sacctmgr list -n qos normal format=maxsubmitjobsperuser"
+            )
+            try:
+                max_submit_jobs = int(stdout_qos.decode("utf8"))
+            except:
+                logging.warning(
+                    f"Slurm's MaxSubmitJobsPerUser couldn't be determined. Reason: {stderr_user}\n{stderr_qos}"
+                )
+                return max_submit_jobs
+        # TODO: Debug
+        print(f"Slurm MaxSubmitJobsPerUser is {max_submit_jobs}.")
+        return max_submit_jobs
+
+    @staticmethod
     def get_number_of_submitted_jobs():
+        number_of_submitted_jobs = 0
         # --array so that each job array element is displayed on a separate line and -h to hide the header
         stdout, stderr, exit_code = call("squeue --array -u $USER -h | wc -l")
-        number_of_submitted_jobs = 0
         if exit_code == 0:
             number_of_submitted_jobs = int(stdout.decode("utf8"))
             # TODO: Debug
-            logging.info(
-                f"Number of currently submitted jobs is {number_of_submitted_jobs}."
-            )
+            print(f"Number of currently submitted jobs is {number_of_submitted_jobs}.")
         else:
-            logging.warn(
+            logging.warning(
                 f"Number of currently submitted jobs couldn't be determined. Reason: {stderr}"
             )
         return number_of_submitted_jobs
@@ -132,13 +160,19 @@ class SlurmExecutor(ClusterExecutor):
                 job_resources_lines += ["#SBATCH --{}={}".format(resource, value)]
 
         max_array_size = self.get_max_array_size()
+        max_submit_jobs = self.get_max_submit_jobs()
+        # Only ever submit at most a third of max_submit_jobs at once.
+        # This way, multiple programs submitting slurm jobs will not block each other
+        # by "occupying" more than half of the number of submittable jobs.
+        batch_size = min(max_array_size, max_submit_jobs // 3)
 
-        job_ids = []
+        scripts = []
+        job_id_futures = []
         ranges = []
         number_of_jobs = job_count if job_count is not None else 1
-        for job_index_start in range(0, number_of_jobs, max_array_size):
+        for job_index_start in range(0, number_of_jobs, batch_size):
             # job_index_end is inclusive
-            job_index_end = min(job_index_start + max_array_size, number_of_jobs) - 1
+            job_index_end = min(job_index_start + batch_size, number_of_jobs) - 1
             array_index_end = job_index_end - job_index_start
 
             job_array_line = ""
@@ -159,10 +193,27 @@ class SlurmExecutor(ClusterExecutor):
                 ]
             )
 
-            job_ids.append(self.submit_text("\n".join(script_lines)))
+            job_id_futures.append(futures.Future())
+            scripts.append("\n".join(script_lines))
             ranges.append((job_index_start, job_index_end + 1))
 
-        return job_ids, ranges
+        job_sizes = [end - start for start, end in ranges]
+        # Replace with asyncio.run when upgrading to python 3.7+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(
+            self.submit_once_allowed(scripts, job_sizes, job_id_futures)
+        )
+
+        return job_id_futures, ranges
+
+    async def submit_once_allowed(self, scripts, job_sizes, futures):
+        max_submit_jobs = self.get_max_submit_jobs()
+
+        for script, job_size, future in zip(scripts, job_sizes, futures):
+            while self.get_number_of_submitted_jobs() + job_size > max_submit_jobs:
+                await asyncio.sleep(SLURM_QUEUE_CHECK_INTERVAL)
+            job_id = self.submit_text(script)
+            future.set_result(job_id)
 
     def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
 

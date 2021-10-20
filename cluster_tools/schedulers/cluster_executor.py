@@ -111,14 +111,14 @@ class ClusterExecutor(futures.Executor):
         cfut.remote <workerid>.
         """
 
-        jobids, ranges = self.inner_submit(
+        jobids_futures, ranges = self.inner_submit(
             f"{sys.executable} -m cluster_tools.remote {workerid} {self.cfut_dir}",
             job_name=self.job_name if self.job_name is not None else job_name,
             additional_setup_lines=self.additional_setup_lines,
             job_count=job_count,
         )
 
-        return jobids, ranges
+        return jobids_futures, ranges
 
     @abstractmethod
     def inner_submit(self, *args, **kwargs):
@@ -263,9 +263,10 @@ class ClusterExecutor(futures.Executor):
             os.unlink(preliminary_output_pickle_path)
 
         job_name = get_function_name(fun)
-        jobids, _ = self._start(workerid, job_name=job_name)
+        jobids_futures, _ = self._start(workerid, job_name=job_name)
+        futures.wait(jobids_futures)
         # Only a single job was submitted
-        jobid = jobids[0]
+        jobid = jobids_futures[0].result()
 
         if self.debug:
             print("job submitted: %i" % jobid, file=sys.stderr)
@@ -349,47 +350,60 @@ class ClusterExecutor(futures.Executor):
 
         job_count = len(allArgs)
         job_name = get_function_name(fun)
-        jobids, ranges = self._start(workerid, job_count, job_name)
+        jobids_futures, ranges = self._start(workerid, job_count, job_name)
 
+        with self.jobs_lock:
+            for jobid_future, (fut_index_start, fut_index_end) in zip(
+                jobids_futures, ranges
+            ):
+                jobid_future.add_done_callback(
+                    lambda fut: self.register_jobs(
+                        fut.result(),
+                        futs_with_output_paths[fut_index_start:fut_index_end],
+                        workerid,
+                        should_keep_output,
+                        fut_index_start,
+                    )
+                )
+
+        return [fut for (fut, _) in futs_with_output_paths]
+
+    def register_jobs(
+        self,
+        jobid,
+        futs_with_output_paths,
+        workerid,
+        should_keep_output,
+        job_index_offset=0,
+    ):
         if self.debug:
             print(
-                "main job(s) submitted: {} totaling {} subjobs.".format(
-                    jobids, job_count
+                "Submitted main job: {} totaling {} subjobs.".format(
+                    jobid, len(futs_with_output_paths)
                 ),
                 file=sys.stderr,
             )
 
-        with self.jobs_lock:
-            for jobid, (fut_index_start, fut_index_end) in zip(jobids, ranges):
-                for fut_index in range(fut_index_start, fut_index_end):
-                    fut, output_path = futs_with_output_paths[fut_index]
-                    job_index = fut_index - fut_index_start
-                    number_of_jobs = fut_index_end - fut_index_start
+        for array_index, (fut, output_path) in enumerate(futs_with_output_paths):
+            jobid_with_index = self.get_jobid_with_index(jobid, array_index)
 
-                    job_key = (
-                        self.get_jobid_with_index(jobid, job_index)
-                        if number_of_jobs > 1
-                        else jobid
-                    )
+            # Thread will wait for it to finish.
+            self.wait_thread.waitFor(
+                with_preliminary_postfix(output_path), jobid_with_index
+            )
 
-                    outfile_name = output_path
+            fut.cluster_jobid = jobid
+            fut.cluster_jobindex = array_index
 
-                    # Thread will wait for it to finish.
-                    self.wait_thread.waitFor(
-                        with_preliminary_postfix(outfile_name), job_key
-                    )
+            job_index = job_index_offset + array_index
+            workerid_with_index = self.get_workerid_with_index(workerid, job_index)
 
-                    fut.cluster_jobid = jobid
-                    fut.cluster_jobindex = job_index
-
-                    self.jobs[job_key] = (
-                        fut,
-                        workerid_with_index,
-                        outfile_name,
-                        should_keep_output,
-                    )
-
-        return [fut for (fut, _) in futs_with_output_paths]
+            self.jobs[jobid_with_index] = (
+                fut,
+                workerid_with_index,
+                output_path,
+                should_keep_output,
+            )
 
     def shutdown(self, wait=True):
         """Close the pool."""
