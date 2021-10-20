@@ -79,8 +79,7 @@ class SlurmExecutor(ClusterExecutor):
         )
         if exit_code == 0:
             max_array_size = int(stdout.decode("utf8"))
-            # TODO: Debug
-            print(f"Slurm MaxArraySize is {max_array_size}.")
+            logging.debug(f"Slurm MaxArraySize is {max_array_size}.")
         else:
             logging.warning(
                 f"Slurm's MaxArraySize couldn't be determined. Reason: {stderr}"
@@ -108,8 +107,7 @@ class SlurmExecutor(ClusterExecutor):
                     f"Slurm's MaxSubmitJobsPerUser couldn't be determined. Reason: {stderr_user}\n{stderr_qos}"
                 )
                 return max_submit_jobs
-        # TODO: Debug
-        print(f"Slurm MaxSubmitJobsPerUser is {max_submit_jobs}.")
+        logging.debug(f"Slurm MaxSubmitJobsPerUser is {max_submit_jobs}.")
         return max_submit_jobs
 
     @staticmethod
@@ -119,8 +117,9 @@ class SlurmExecutor(ClusterExecutor):
         stdout, stderr, exit_code = call("squeue --array -u $USER -h | wc -l")
         if exit_code == 0:
             number_of_submitted_jobs = int(stdout.decode("utf8"))
-            # TODO: Debug
-            print(f"Number of currently submitted jobs is {number_of_submitted_jobs}.")
+            logging.debug(
+                f"Number of currently submitted jobs is {number_of_submitted_jobs}."
+            )
         else:
             logging.warning(
                 f"Number of currently submitted jobs couldn't be determined. Reason: {stderr}"
