@@ -2,12 +2,11 @@
 """
 import re
 import os
-import threading
-import time
 from cluster_tools.util import chcall, random_string, call
 from .cluster_executor import ClusterExecutor
 import logging
 from typing import Union
+from concurrent import futures
 
 
 # qstat vs. checkjob
@@ -67,8 +66,7 @@ class PBSExecutor(ClusterExecutor):
     def inner_submit(
         self, cmdline, job_name=None, additional_setup_lines=[], job_count=None
     ):
-        """Starts a PBS job that runs the specified shell command line.
-        """
+        """Starts a PBS job that runs the specified shell command line."""
 
         # if job_count is None else "$PBS_JOBID.$PBS_ARRAY_INDEX"
         # $PBS_JOBID will also include an array index if it's a job array
@@ -80,7 +78,7 @@ class PBSExecutor(ClusterExecutor):
             specs = []
             for resource, value in self.job_resources.items():
                 if resource == "time":
-                    resource == "walltime"
+                    resource = "walltime"
                 specs.append("{}={}".format(resource, value))
             if len(specs) > 0:
                 job_resources_line = "#PBS -l {}".format(",".join(specs))
@@ -109,7 +107,11 @@ class PBSExecutor(ClusterExecutor):
             "{}".format(cmdline),
         ]
 
-        return self.submit_text("\n".join(script_lines))
+        job_id = self.submit_text("\n".join(script_lines))
+        job_id_future = futures.Future()
+        job_id_future.set_result(job_id)
+
+        return [job_id_future], [(0, job_count or 1)]
 
     def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
         if len(str(job_id).split("_")) >= 2:
