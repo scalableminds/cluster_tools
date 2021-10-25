@@ -265,7 +265,6 @@ class ClusterExecutor(futures.Executor):
 
         job_name = get_function_name(fun)
         jobids_futures, _ = self._start(workerid, job_name=job_name)
-        futures.wait(jobids_futures)
         # Only a single job was submitted
         jobid = jobids_futures[0].result()
 
