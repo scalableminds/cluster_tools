@@ -9,6 +9,7 @@ import logging
 from typing import Union
 import concurrent
 import threading
+from functools import lru_cache
 
 SLURM_STATES = {
     "Failure": [
@@ -38,6 +39,13 @@ SLURM_STATES = {
 }
 
 SLURM_QUEUE_CHECK_INTERVAL = 1 if "pytest" in sys.modules else 60
+
+
+def noopDecorator(func):
+    return func
+
+
+cache_in_production = noopDecorator if "pytest" in sys.modules else lru_cache(maxsize=1)
 
 
 class SlurmExecutor(ClusterExecutor):
@@ -75,6 +83,7 @@ class SlurmExecutor(ClusterExecutor):
         return job_id_string
 
     @staticmethod
+    @cache_in_production
     def get_max_array_size():
         max_array_size = 2 ** 32
         # See https://unix.stackexchange.com/a/364615
@@ -91,6 +100,7 @@ class SlurmExecutor(ClusterExecutor):
         return max_array_size
 
     @staticmethod
+    @cache_in_production
     def get_max_submit_jobs():
         max_submit_jobs = 2 ** 32
         # Check whether there is a limit per user
