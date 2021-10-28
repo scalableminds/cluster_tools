@@ -361,22 +361,20 @@ class ClusterExecutor(futures.Executor):
         job_name = get_function_name(fun)
         jobids_futures, job_index_ranges = self._start(workerid, job_count, job_name)
 
-        with self.jobs_lock:
-            number_of_batches = len(jobids_futures)
-            for batch_index, (
-                jobid_future,
-                (job_index_start, job_index_end),
-            ) in enumerate(zip(jobids_futures, job_index_ranges)):
-                jobid_future.add_done_callback(
-                    partial(
-                        self.register_jobs,
-                        futs_with_output_paths[job_index_start:job_index_end],
-                        workerid,
-                        should_keep_output,
-                        job_index_start,
-                        f"{batch_index + 1}/{number_of_batches}",
-                    )
+        number_of_batches = len(jobids_futures)
+        for batch_index, (jobid_future, (job_index_start, job_index_end)) in enumerate(
+            zip(jobids_futures, job_index_ranges)
+        ):
+            jobid_future.add_done_callback(
+                partial(
+                    self.register_jobs,
+                    futs_with_output_paths[job_index_start:job_index_end],
+                    workerid,
+                    should_keep_output,
+                    job_index_start,
+                    f"{batch_index + 1}/{number_of_batches}",
                 )
+            )
 
         return [fut for (fut, _) in futs_with_output_paths]
 
@@ -413,12 +411,13 @@ class ClusterExecutor(futures.Executor):
             job_index = job_index_offset + array_index
             workerid_with_index = self.get_workerid_with_index(workerid, job_index)
 
-            self.jobs[jobid_with_index] = (
-                fut,
-                workerid_with_index,
-                output_path,
-                should_keep_output,
-            )
+            with self.jobs_lock:
+                self.jobs[jobid_with_index] = (
+                    fut,
+                    workerid_with_index,
+                    output_path,
+                    should_keep_output,
+                )
 
     def shutdown(self, wait=True):
         """Close the pool."""
