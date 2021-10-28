@@ -107,19 +107,26 @@ class ClusterExecutor(futures.Executor):
         pass
 
     def _start(self, workerid, job_count=None, job_name=None):
-        """Start a job with the given worker ID and return an ID
-        identifying the new job. The job should run ``python -m
+        """Start job(s) with the given worker ID and return IDs
+        identifying the new job(s). The job should run ``python -m
         cfut.remote <workerid>.
         """
 
-        jobids_futures, ranges = self.inner_submit(
+        jobids_futures, job_index_ranges = self.inner_submit(
             f"{sys.executable} -m cluster_tools.remote {workerid} {self.cfut_dir}",
             job_name=self.job_name if self.job_name is not None else job_name,
             additional_setup_lines=self.additional_setup_lines,
             job_count=job_count,
         )
 
-        return jobids_futures, ranges
+        # Since not all jobs may be submitted immediately, cluster executors return
+        # jobid futures in the inner_submit function. Also, since it may not be allowed
+        # to submit all jobs at once, the jobs may be submitted in batches with each batch
+        # containing a subset of all jobs identified by a separate jobid. The job_index_ranges
+        # array of (start_index, end_index) tuples, indicates which of the job_count
+        # jobs were submitted in each batch. start_index is inclusive whereas end_index
+        # is not.
+        return jobids_futures, job_index_ranges
 
     @abstractmethod
     def inner_submit(self, *args, **kwargs):
@@ -149,8 +156,9 @@ class ClusterExecutor(futures.Executor):
     def get_job_id_string(self):
         pass
 
-    def get_temp_file_path(self, file_name):
-        return os.path.join(self.cfut_dir, file_name)
+    @staticmethod
+    def get_temp_file_path(cfut_dir, file_name):
+        return os.path.join(cfut_dir, file_name)
 
     @staticmethod
     def format_infile_name(cfut_dir, job_id):
@@ -351,19 +359,22 @@ class ClusterExecutor(futures.Executor):
 
         job_count = len(allArgs)
         job_name = get_function_name(fun)
-        jobids_futures, ranges = self._start(workerid, job_count, job_name)
+        jobids_futures, job_index_ranges = self._start(workerid, job_count, job_name)
 
         with self.jobs_lock:
-            for jobid_future, (fut_index_start, fut_index_end) in zip(
-                jobids_futures, ranges
-            ):
+            number_of_batches = len(jobids_futures)
+            for batch_index, (
+                jobid_future,
+                (job_index_start, job_index_end),
+            ) in enumerate(zip(jobids_futures, job_index_ranges)):
                 jobid_future.add_done_callback(
                     partial(
                         self.register_jobs,
-                        futs_with_output_paths[fut_index_start:fut_index_end],
+                        futs_with_output_paths[job_index_start:job_index_end],
                         workerid,
                         should_keep_output,
-                        fut_index_start,
+                        job_index_start,
+                        f"{batch_index + 1}/{number_of_batches}",
                     )
                 )
 
@@ -375,13 +386,15 @@ class ClusterExecutor(futures.Executor):
         workerid,
         should_keep_output,
         job_index_offset,
+        batch_description,
         jobid_future,
     ):
         jobid = jobid_future.result()
         if self.debug:
+
             print(
-                "Submitted main job: {} totaling {} subjobs.".format(
-                    jobid, len(futs_with_output_paths)
+                "Submitted array job {} with JobId {} and {} subjobs.".format(
+                    batch_description, jobid, len(futs_with_output_paths)
                 ),
                 file=sys.stderr,
             )

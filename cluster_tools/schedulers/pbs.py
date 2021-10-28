@@ -51,7 +51,9 @@ class PBSExecutor(ClusterExecutor):
         the job ID.
         """
 
-        filename = self.get_temp_file_path("_temp_pbs_{}.sh".format(random_string()))
+        filename = self.get_temp_file_path(
+            self.cfut_dir, "_temp_pbs_{}.sh".format(random_string())
+        )
         with open(filename, "w") as f:
             f.write(job)
         jobid_desc, _ = chcall("qsub -V {}".format(filename))

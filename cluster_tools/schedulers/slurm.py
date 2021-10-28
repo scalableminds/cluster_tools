@@ -6,9 +6,9 @@ import sys
 from cluster_tools.util import chcall, random_string, call
 from .cluster_executor import ClusterExecutor
 import logging
-import asyncio
 from typing import Union
-from concurrent import futures
+import concurrent
+import threading
 
 SLURM_STATES = {
     "Failure": [
@@ -41,6 +41,10 @@ SLURM_QUEUE_CHECK_INTERVAL = 1 if "pytest" in sys.modules else 60
 
 
 class SlurmExecutor(ClusterExecutor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.submit_thread = None
+
     @staticmethod
     def get_job_array_index():
         return os.environ.get("SLURM_ARRAY_TASK_ID", None)
@@ -126,12 +130,15 @@ class SlurmExecutor(ClusterExecutor):
             )
         return number_of_submitted_jobs
 
-    def submit_text(self, job):
+    @classmethod
+    def submit_text(cls, job, cfut_dir):
         """Submits a Slurm job represented as a job file string. Returns
         the job ID.
         """
 
-        filename = self.get_temp_file_path("_temp_slurm{}.sh".format(random_string()))
+        filename = cls.get_temp_file_path(
+            cfut_dir, "_temp_slurm{}.sh".format(random_string())
+        )
         with open(filename, "w") as f:
             f.write(job)
         job_id, stderr = chcall("sbatch --parsable {}".format(filename))
@@ -141,6 +148,11 @@ class SlurmExecutor(ClusterExecutor):
             logging.warning(f"Submitting batch job emitted warnings: {stderr}")
 
         return int(job_id)
+
+    def handle_kill(self, *args, **kwargs):
+        if self.submit_thread:
+            self.submit_thread.stop()
+        super().handle_kill(*args, **kwargs)
 
     def inner_submit(
         self, cmdline, job_name=None, additional_setup_lines=None, job_count=None
@@ -162,10 +174,10 @@ class SlurmExecutor(ClusterExecutor):
 
         max_array_size = self.get_max_array_size()
         max_submit_jobs = self.get_max_submit_jobs()
-        # Only ever submit at most a third of max_submit_jobs at once.
+        # Only ever submit at most a third of max_submit_jobs at once (but at least one).
         # This way, multiple programs submitting slurm jobs will not block each other
         # by "occupying" more than half of the number of submittable jobs.
-        batch_size = min(max_array_size, max_submit_jobs // 3)
+        batch_size = max(min(max_array_size, max_submit_jobs // 3), 1)
 
         scripts = []
         job_id_futures = []
@@ -179,7 +191,6 @@ class SlurmExecutor(ClusterExecutor):
             job_array_line = ""
             if job_count is not None:
                 job_array_line = "#SBATCH --array=0-{}".format(array_index_end)
-
             script_lines = (
                 [
                     "#!/bin/sh",
@@ -194,27 +205,18 @@ class SlurmExecutor(ClusterExecutor):
                 ]
             )
 
-            job_id_futures.append(futures.Future())
+            job_id_futures.append(concurrent.futures.Future())
             scripts.append("\n".join(script_lines))
             ranges.append((job_index_start, job_index_end + 1))
 
         job_sizes = [end - start for start, end in ranges]
-        # Replace with asyncio.run when upgrading to python 3.7+
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            self.submit_once_allowed(scripts, job_sizes, job_id_futures)
+
+        self.submit_thread = JobSubmitThread(
+            scripts, job_sizes, job_id_futures, self.cfut_dir
         )
+        self.submit_thread.start()
 
         return job_id_futures, ranges
-
-    async def submit_once_allowed(self, scripts, job_sizes, futures):
-        max_submit_jobs = self.get_max_submit_jobs()
-
-        for script, job_size, future in zip(scripts, job_sizes, futures):
-            while self.get_number_of_submitted_jobs() + job_size > max_submit_jobs:
-                await asyncio.sleep(SLURM_QUEUE_CHECK_INTERVAL)
-            job_id = self.submit_text(script)
-            future.set_result(job_id)
 
     def check_for_crashed_job(self, job_id) -> Union["failed", "ignore", "completed"]:
 
@@ -282,3 +284,37 @@ class SlurmExecutor(ClusterExecutor):
                 "Couldn't query pending jobs. Polling for finished jobs might be slow."
             )
             return []
+
+
+class JobSubmitThread(threading.Thread):
+    def __init__(self, scripts, job_sizes, futures, cfut_dir, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+        self.scripts = scripts
+        self.job_sizes = job_sizes
+        self.futures = futures
+        self.cfut_dir = cfut_dir
+
+    def stop(self):
+        self._stop_event.set()
+
+    def run(self):
+        max_submit_jobs = SlurmExecutor.get_max_submit_jobs()
+
+        for script, job_size, future in zip(self.scripts, self.job_sizes, self.futures):
+            if self._stop_event.is_set():
+                return
+
+            while (
+                SlurmExecutor.get_number_of_submitted_jobs() + job_size
+                > max_submit_jobs
+            ):
+                # _stop_event.wait will wait for SLURM_QUEUE_CHECK_INTERVAL unless the event is signaled
+                # in which case the thread was stopped
+                self._stop_event.wait(SLURM_QUEUE_CHECK_INTERVAL)
+
+                if self._stop_event.is_set():
+                    return
+
+            job_id = SlurmExecutor.submit_text(script, self.cfut_dir)
+            future.set_result(job_id)

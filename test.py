@@ -410,6 +410,70 @@ def test_slurm_max_submit_user():
             assert reset_max_submit_jobs == original_max_submit_jobs
 
 
+def test_slurm_deferred_submit():
+    max_submit_jobs = 1
+
+    # Only one job can be scheduled at a time
+    _, _, exit_code = call(
+        f"echo y | sacctmgr modify qos normal set MaxSubmitJobs={max_submit_jobs}"
+    )
+    executor = cluster_tools.get_executor("slurm", debug=True)
+
+    try:
+        with executor:
+            time_of_start = time.time()
+            futures = executor.map_to_futures(sleep, [0.5, 0.5])
+            time_of_futures = time.time()
+            concurrent.futures.wait(futures)
+            time_of_result = time.time()
+
+            # The futures should be returned before each job was scheduled
+            assert time_of_futures - time_of_start < 0.5
+
+            # Computing the results should have taken at least two seconds
+            # since only one job is scheduled at a time and each job takes 0.5 seconds
+            assert time_of_result - time_of_start > 1
+    finally:
+        _, _, exit_code = call(
+            "echo y | sacctmgr modify qos normal set MaxSubmitJobs=-1"
+        )
+
+
+def test_slurm_deferred_submit_shutdown():
+    # Test that the SlurmExecutor stops scheduling jobs in a separate thread
+    # once it was killed
+    max_submit_jobs = 1
+
+    # Only one job can be scheduled at a time
+    _, _, exit_code = call(
+        f"echo y | sacctmgr modify qos normal set MaxSubmitJobs={max_submit_jobs}"
+    )
+    executor = cluster_tools.get_executor("slurm", debug=True)
+
+    try:
+        executor.map_to_futures(sleep, [0.5] * 10)
+
+        # Wait for the first job to be submitted
+        time.sleep(0.2)
+
+        assert executor.submit_thread.is_alive()
+
+        with pytest.raises(SystemExit) as pytest_wrapped_e:
+            executor.handle_kill(None, None)
+        assert pytest_wrapped_e.type == SystemExit
+        assert pytest_wrapped_e.value.code == 130
+
+        # Wait for the thread to die down, but less than it would take to submit all jobs
+        # which would take ~5 seconds since only one job is scheduled at a time
+        executor.submit_thread.join(0.2)
+        assert not executor.submit_thread.is_alive()
+
+    finally:
+        _, _, exit_code = call(
+            "echo y | sacctmgr modify qos normal set MaxSubmitJobs=-1"
+        )
+
+
 def test_slurm_number_of_submitted_jobs():
     number_of_jobs = 6
     executor = cluster_tools.get_executor("slurm", debug=True)
@@ -419,25 +483,44 @@ def test_slurm_number_of_submitted_jobs():
     with executor:
         futures = executor.map_to_futures(sleep, [1] * number_of_jobs)
         assert executor.get_number_of_submitted_jobs() == number_of_jobs
-        concurrent.futures.wait(futures)
 
-    assert executor.get_number_of_submitted_jobs() == 0
+        concurrent.futures.wait(futures)
+        assert executor.get_number_of_submitted_jobs() == 0
 
 
 def test_slurm_max_array_size():
+    max_array_size = 2
+
     executor = cluster_tools.get_executor("slurm", debug=True)
+    original_max_array_size = executor.get_max_array_size()
 
-    max_array_size = executor.get_max_array_size()
+    command = f"MaxArraySize={max_array_size}"
+    _, _, exit_code = call(
+        f"echo -e '{command}' >> /etc/slurm/slurm.conf && scontrol reconfigure"
+    )
 
-    with executor:
-        futures = executor.map_to_futures(square, range(6))
-        concurrent.futures.wait(futures)
-        job_ids = [fut.cluster_jobid for fut in futures]
+    try:
+        assert exit_code == 0
 
-        # Count how often each job_id occurs which corresponds to the array size of the job
-        occurences = list(Counter(job_ids).values())
+        new_max_array_size = executor.get_max_array_size()
+        assert new_max_array_size == max_array_size
 
-        assert all(array_size <= max_array_size for array_size in occurences)
+        with executor:
+            futures = executor.map_to_futures(square, range(6))
+            concurrent.futures.wait(futures)
+            job_ids = [fut.cluster_jobid for fut in futures]
+
+            # Count how often each job_id occurs which corresponds to the array size of the job
+            occurences = list(Counter(job_ids).values())
+
+            assert all(array_size <= max_array_size for array_size in occurences)
+    finally:
+        _, _, exit_code = call(
+            f"sed -i 's/{command}//g' /etc/slurm/slurm.conf && scontrol reconfigure"
+        )
+        assert exit_code == 0
+        reset_max_array_size = executor.get_max_array_size()
+        assert reset_max_array_size == original_max_array_size
 
 
 def test_executor_args():
