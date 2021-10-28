@@ -324,7 +324,6 @@ class ClusterExecutor(futures.Executor):
             pickling.dump(fun, file)
         self.store_main_path_to_meta_file(workerid)
 
-        # Submit jobs eagerly
         for index, arg in enumerate(allArgs):
             fut = self.create_enriched_future()
             workerid_with_index = self.get_workerid_with_index(workerid, index)
@@ -345,7 +344,6 @@ class ClusterExecutor(futures.Executor):
                 )
                 os.unlink(preliminary_output_pickle_path)
 
-            # Start the job.
             serialized_function_info = pickling.dumps(
                 (pickled_function_path, [arg], {}, self.meta_data, output_pickle_path)
             )
@@ -355,6 +353,16 @@ class ClusterExecutor(futures.Executor):
                 f.write(serialized_function_info)
 
             futs_with_output_paths.append((fut, output_pickle_path))
+
+        with self.jobs_lock:
+            # Use a separate loop to avoid having to acquire the jobs_lock many times
+            # or for the full duration of the above loop
+            for index in range(len(futs_with_output_paths)):
+                workerid_with_index = self.get_workerid_with_index(workerid, index)
+                # Register the job in the jobs array, although the jobid is not known yet.
+                # Otherwise it might happen that self.jobs becomes empty, but some of the jobs were
+                # not even submitted yet.
+                self.jobs[workerid_with_index] = "pending"
 
         job_count = len(allArgs)
         job_name = get_function_name(fun)
@@ -409,8 +417,9 @@ class ClusterExecutor(futures.Executor):
 
             job_index = job_index_offset + array_index
             workerid_with_index = self.get_workerid_with_index(workerid, job_index)
-
+            # Remove the pending jobs entry and add the correct one
             with self.jobs_lock:
+                del self.jobs[workerid_with_index]
                 self.jobs[jobid_with_index] = (
                     fut,
                     workerid_with_index,
