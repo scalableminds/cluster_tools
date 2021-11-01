@@ -51,7 +51,7 @@ cache_in_production = noopDecorator if "pytest" in sys.modules else lru_cache(ma
 class SlurmExecutor(ClusterExecutor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.submit_thread = None
+        self.submit_threads = []
 
     @staticmethod
     def get_job_array_index():
@@ -160,9 +160,14 @@ class SlurmExecutor(ClusterExecutor):
         return int(job_id)
 
     def handle_kill(self, *args, **kwargs):
-        if self.submit_thread:
-            self.submit_thread.stop()
+        for submit_thread in self.submit_threads:
+            submit_thread.stop()
         super().handle_kill(*args, **kwargs)
+
+    def cleanup_submit_threads(self):
+        self.submit_threads = [
+            thread for thread in self.submit_threads if thread.is_alive()
+        ]
 
     def inner_submit(
         self, cmdline, job_name=None, additional_setup_lines=None, job_count=None
@@ -221,10 +226,13 @@ class SlurmExecutor(ClusterExecutor):
 
         job_sizes = [end - start for start, end in ranges]
 
-        self.submit_thread = JobSubmitThread(
+        self.cleanup_submit_threads()
+
+        submit_thread = JobSubmitThread(
             scripts, job_sizes, job_id_futures, self.cfut_dir
         )
-        self.submit_thread.start()
+        self.submit_threads.append(submit_thread)
+        submit_thread.start()
 
         return job_id_futures, ranges
 

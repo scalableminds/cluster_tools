@@ -439,9 +439,17 @@ def test_slurm_deferred_submit():
         )
 
 
+def wait_until_first_job_was_submitted(executor):
+    # Since the job submission is not synchronous, we need to poll
+    # to find out when the first job was submitted
+    while executor.get_number_of_submitted_jobs() <= 0:
+        time.sleep(0.1)
+
+
 def test_slurm_deferred_submit_shutdown():
     # Test that the SlurmExecutor stops scheduling jobs in a separate thread
-    # once it was killed
+    # once it was killed even if the executor was used multiple times and
+    # therefore started multiple job submission threads
     max_submit_jobs = 1
 
     # Only one job can be scheduled at a time
@@ -451,22 +459,25 @@ def test_slurm_deferred_submit_shutdown():
     executor = cluster_tools.get_executor("slurm", debug=True)
 
     try:
+        # Use the executor twice to start multiple job submission threads
+        executor.map_to_futures(sleep, [0.5] * 10)
         executor.map_to_futures(sleep, [0.5] * 10)
 
-        # Wait for the first job to be submitted
-        time.sleep(0.3)
+        wait_until_first_job_was_submitted(executor)
 
-        assert executor.submit_thread.is_alive()
+        for submit_thread in executor.submit_threads:
+            assert submit_thread.is_alive()
 
         with pytest.raises(SystemExit) as pytest_wrapped_e:
             executor.handle_kill(None, None)
         assert pytest_wrapped_e.type == SystemExit
         assert pytest_wrapped_e.value.code == 130
 
-        # Wait for the thread to die down, but less than it would take to submit all jobs
+        # Wait for the threads to die down, but less than it would take to submit all jobs
         # which would take ~5 seconds since only one job is scheduled at a time
-        executor.submit_thread.join(0.2)
-        assert not executor.submit_thread.is_alive()
+        for submit_thread in executor.submit_threads:
+            submit_thread.join(1)
+            assert not submit_thread.is_alive()
 
         # Wait for scheduled jobs to finish, so that the queue is empty again
         while executor.get_number_of_submitted_jobs() > 0:
@@ -487,8 +498,7 @@ def test_slurm_number_of_submitted_jobs():
     with executor:
         futures = executor.map_to_futures(sleep, [1] * number_of_jobs)
 
-        # Wait for the first job to be submitted
-        time.sleep(0.3)
+        wait_until_first_job_was_submitted(executor)
 
         assert executor.get_number_of_submitted_jobs() == number_of_jobs
 
