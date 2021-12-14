@@ -1,3 +1,6 @@
+# Note: This package was moved to [wk-libs](https://github.com/scalableminds/webknossos-libs/tree/master/cluster_tools#cluster-tools).
+
+
 # Cluster Tools
 
 [![CircleCI](https://circleci.com/gh/scalableminds/cluster_tools/tree/master.svg?style=svg)](https://circleci.com/gh/scalableminds/cluster_tools/tree/master)
